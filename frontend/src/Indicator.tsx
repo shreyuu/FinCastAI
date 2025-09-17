@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
-import { ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Wallet, Newspaper, BarChart2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './Indicator.css';
 
 interface StockResponse {
@@ -24,7 +24,7 @@ function StockAnalyzer() {
   const [company, setCompany] = useState("");
   const [ticker, setTicker] = useState("");
   const [ownedStock, setOwnedStock] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<StockResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -48,7 +48,7 @@ function StockAnalyzer() {
     }
     setLoading(false);
   };
-  const [isOpen, setIsOpen] = useState(false);
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-layout">
