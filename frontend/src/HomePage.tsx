@@ -57,7 +57,6 @@ function HomePage() {
                 </div>
             </div>
             <div className='HomePage-container2'>
-
             </div>
         </div>
     )

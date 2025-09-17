@@ -92,7 +92,7 @@ function StockAnalyzer() {
                         onClick={() => setIsOpen(!isOpen)}
                       >
                         <BarChart2 className="nav-icon" />
-                        <span>Stock & fund</span>
+                        {/* <span>Stock & fund</span> */}
                         {(!isOpen) ?
                         <ChevronDown className={`ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-45'}`} /> :
                         <ChevronUp className={`ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-45'}`} />}
