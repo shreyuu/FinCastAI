@@ -1,13 +1,24 @@
-import { useState } from "react";
-import { Bell, Mail, ChevronDown, LayoutDashboard, Wallet, Newspaper, BarChart2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from "react";
+import { Bell, Mail, ChevronDown } from 'lucide-react';
+// Update the import path to match the actual Sidebar location
+import Sidebar from './components/Sidebar';
 import topUpImage from './assets/photo/topUp.png';
 import './newImpact.css'
+
 function NewspaperSec() {
-  const navigate = useNavigate();
+  // Removed unused 'navigate'
   const [ticker, setTicker] = useState("");
   const [impact, setImpact] = useState<number | null>(null);
   const [reasons, setReasons] = useState<{ sentiment: string; reason: string }[]>([]);
+  const [userName, setUserName] = useState<string>("");
+  
+    useEffect(() => {
+      // Example: Retrieve user info from localStorage after login
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (user && user.name) {
+        setUserName(user.name);
+      }
+    }, []);
 
   // ✅ Function to fetch news impact from FastAPI
   const fetchNewsImpact = async () => {
@@ -32,43 +43,8 @@ function NewspaperSec() {
       <div className="dashboard-layout">
         
         {/* Sidebar */}
-        <div className="sidebar">
-          <div className='nav-first-container'>
-            <div className="logo-container">
-              <BarChart2 className="nav-icon" />
-              <span className="logo-text">EStock</span>
-            </div>
-
-            {/* <div className="investment-card">
-              <div className="investment-label">Total Investment</div>
-              <div className="investment-amount">$5380.90</div>
-              <div className="investment-percentage">+18.10%</div>
-            </div> */}
-          </div>
-          <div className='nev-bar'>
-            <nav>
-              <div className='nev-2ndcontainer'>
-                {/* <div className="nav-item" onClick={() => navigate('/')}>
-                  <Home className="nav-icon" />
-                  <span>Home</span>
-                </div> */}
-                <div className="nav-item" onClick={() => navigate('/dashBoard')}>
-                  <LayoutDashboard className="nav-icon" />
-                  <span>Dashboard</span>
-                </div>
-                <div className="nav-item" onClick={() => navigate('/StockAnalyzer')} >
-                  <Wallet className="nav-icon" />
-                  <span>Indicators</span>
-                </div>
-                <div className="nav-item"  onClick={() => navigate('/news')}>
-                  <Newspaper className="nav-icon" />
-                  <span>News</span>
-                </div>
-              </div>
-            </nav>
-          </div>
-        </div>
-
+        <Sidebar />
+        
         {/* Main Content */}
         <div className="main-content">
           {/* Header */}
@@ -79,7 +55,7 @@ function NewspaperSec() {
               <Bell />
               <div className="profile">
                 <div className="profile-image"></div>
-                <span>Airlangga Mahesa</span>
+                <span>{userName || "Guest"}</span>
                 <ChevronDown />
               </div>
             </div>

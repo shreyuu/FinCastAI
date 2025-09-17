@@ -11,7 +11,7 @@ const SignInPage = () => {
   const navigate = useNavigate();
   const [loginMessage, setLoginMessage] = useState('');
   
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     console.log('Form submitted:', formData);
 
@@ -31,13 +31,12 @@ const SignInPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        // Assuming the response has a token or some success message
         setLoginMessage('Login successful!');
-        console.log('Logged in successfully:', data);
+        localStorage.setItem("user", JSON.stringify(data.user)); // Save user info
         setTimeout(() => {
           setLoginMessage('');
-          navigate('/dashboard');  // Redirect to dashboard after 2 seconds
-        }, 2000);  // Redirect to dashboard upon success
+          navigate('/dashboard');
+        }, 2000);
       } else {
         alert('Login failed: ' + data.error);
       }
@@ -47,7 +46,7 @@ const SignInPage = () => {
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
