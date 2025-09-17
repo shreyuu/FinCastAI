@@ -31,7 +31,21 @@ body {
     width: 800px;
 }
 
+.login-message {
+  background-color: white; /* Green for success */
+  color: #4CAF50;
+  padding: 10px;
+  text-align: center;
+  margin-top: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: opacity 0.5s ease-in-out;
+}
 
+/* Error message style */
+.login-message.error {
+  background-color: #f44336; /* Red for error */
+}
 
 .left-content h1 {
     font-size: 24px;

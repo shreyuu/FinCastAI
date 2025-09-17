@@ -1,9 +1,25 @@
 import { useState } from "react";
 import axios from "axios";
-import { Bell, Mail, ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
+import { ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import './Indicator.css';
 
+interface StockResponse {
+  company: string;
+  ticker: string;
+  impact: number;
+  RSI: number;
+  EMA: number;
+  MACD: number;
+  Bollinger_Bands: {
+    Low: number;
+    Mid: number;
+    Up: number;
+  };
+  OBV: number;
+  trade_decision: string;
+  error?: string;
+}
 function StockAnalyzer() {
   const [company, setCompany] = useState("");
   const [ticker, setTicker] = useState("");
@@ -15,11 +31,17 @@ function StockAnalyzer() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:8000/Indicotor", {
+      const response = await axios.post<StockResponse>("http://localhost:8000/Indicotor", {
         company,
         ticker,
         owned_stock: ownedStock,
       });
+      if (response.status === 200 && response.data.error) {
+        window.alert(response.data.error + " or check the stock name.");
+        setLoading(false);
+        return;
+      }
+
       setResult(response.data);
     } catch (error) {
       console.error("Error fetching data", error);

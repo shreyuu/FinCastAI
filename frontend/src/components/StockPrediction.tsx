@@ -7,13 +7,13 @@ const date = new Date();
 const formattedDate = date.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit',year: 'numeric' });
 
 
-const watchlist = [
+/*const watchlist = [
   { name: 'SPOT', company: 'Spotify', value: '$310.40', change: '-1.10%' },
   { name: 'ABNB', company: 'Airbnb', value: '$132.72', change: '-10.29%' },
   { name: 'SHOP', company: 'Shopify', value: '$28.57', change: '-6.48%' },
   { name: 'SONY', company: 'Playstation', value: '$71.86', change: '+0.98%' },
   { name: 'DBX', company: 'Dropbox Inc', value: '$20.44', change: '-3.08%' },
-];
+];*/
 
 interface StockDataPoint {
   date: string;
@@ -23,8 +23,9 @@ interface StockDataPoint {
   name : string;
 }
 
+
 const StockCards = () => {
-  const [stocks, setStocks] = useState<{ name: string; price: number | string }[]>([]);
+  const [stocks, setStocks] = useState<{ name: string; price: number | string;color: string,percent_change:number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,12 +48,34 @@ const StockCards = () => {
       ) : (
         stocks.map((stock) => (
           <div key={stock.name} className="stock-card">
-            <div className="stock-info">
+            <div className="stock-infos">
               <span>{stock.name}</span>
             </div>
             <div className="stock-values">
-              <div>Current Price</div>
-              <div className="stock-amount">₹{stock.price}</div>
+              <div><strong>Current Price</strong></div>
+              <div className="stock-amount"  style={{ color: stock.color }}>
+                ₹{typeof stock.price === 'number' ? stock.price.toFixed(2) : parseFloat(stock.price).toFixed(2)}
+                  {stock.color === 'red' && (
+                    <span style={{ color: 'red', marginLeft: '5px' }}> ↓</span> // ⬇
+                  )}
+                  {stock.color === 'green' && (
+                    <span style={{ color: 'green' }}> ↑</span> // ⬇
+                  )}
+              </div>
+              <div>
+                  {
+                    stock.color ==='red' && 
+                    (
+                      <span style={{ color: 'red', marginLeft: '5px' }}>({stock.percent_change}%)</span> 
+                    ) 
+                  }
+                  {
+                    stock.color ==='green' && 
+                    (
+                      <span style={{ color: 'green', marginLeft: '5px' }}>(+{stock.percent_change}%)</span> 
+                    ) 
+                  }
+              </div>
             </div>
           </div>
         ))
@@ -61,6 +84,10 @@ const StockCards = () => {
   );
 };
 
+function capitalizeFirst(str: string): string {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
 function StockDashboard() {
   const [ticker, setTicker] = useState("");
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
@@ -68,7 +95,7 @@ function StockDashboard() {
   const [loadingChart, setLoadingChart] = useState(false);
   const [stockName, setStockName] = useState(""); // To store the stock name
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-
+  const [rawPrices, setRawPrices] = useState<{ name: string; price: number | string; color: string,percent_change:number }[]>([]);
   const fetchPredictions = async () => {
     setLoadingChart(true);
     const response = await fetch("http://localhost:8000/predict", {
@@ -81,15 +108,25 @@ function StockDashboard() {
         forecast_out: 7,
       }),
     });
+    
     const data = await response.json();
+    if (data.error) {
+      // Show the error message from the API in a popup
+      window.alert(data.error+" or check the stock name ");
+      setLoadingChart(false);
+      return; // Exit the function
+    }
     setStockData(data.data);
     setStockName(data.name); // Assuming 'name' is part of the API response
     setCurrentPrice(data.curprice);
     setLoadingChart(false);
+    setRawPrices(data.stock_prices);
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
+    
     if (active && payload && payload.length) {
+      
       const historicalValue = payload.find(p => p.dataKey === 'historicalPrice')?.value;
       const predictedValue = payload.find(p => p.dataKey === 'predictedPrice')?.value;
       const value = historicalValue ?? predictedValue;
@@ -120,19 +157,19 @@ function StockDashboard() {
           <div className='nav-first-container'>
             <div className="logo-container">
               <BarChart2 className="nav-icon" />
-              <span className="logo-text">GoStock</span>
+              <span className="logo-text">EStock</span>
             </div>
 
-            <div className="investment-card">
+            {/* <div className="investment-card">
               <div className="investment-label">Total Investment</div>
               <div className="investment-amount">$5380.90</div>
               <div className="investment-percentage">+18.10%</div>
-            </div>
+            </div> */}
           </div>
           <div className='nev-bar'>
             <nav>
               <div className='nev-2ndcontainer'>
-                <div className="nav-item" onClick={() => navigate('/suggetion')}>
+                <div className="nav-item" onClick={() => navigate('/')}>
                   <Home className="nav-icon" />
                   <span>Home</span>
                 </div>
@@ -142,7 +179,7 @@ function StockDashboard() {
                 </div>
                 <div className="nav-item" onClick={() => navigate('/StockAnalyzer')} >
                   <Wallet className="nav-icon" />
-                  <span>Wallet</span>
+                  <span>Indicators</span>
                 </div>
                 <div className="nav-item"  onClick={() => navigate('/news')}>
                   <Newspaper className="nav-icon" />
@@ -225,15 +262,16 @@ function StockDashboard() {
           {/* Portfolio Section */}
           <h2 className="section-title">My Portfolio</h2>
           <div className="portfolio-section">
-            <div className="stock-cards">
+            
             <StockCards />
-            </div>
+            
           </div>
 
           <div className='chart-watchlist-container'>
             {/* Chart Section */}
             <div className="chart-container">
               <div className="chart-header">
+                {/*
                 <div className="time-filters">
                 <button className="time-filter">1 Day</button>
                 <button className="time-filter active">1 Week</button>
@@ -243,27 +281,43 @@ function StockDashboard() {
                 <button className="time-filter">1 Year</button>
                 <button className="time-filter">5 Year</button>
                 <button className="time-filter">All</button>
-              </div>
-                
+                </div>*/}
               </div>
               
               {loadingChart ? (
             <p>Loading chart...</p>
           ) : stockData.length > 0 ? (
             <div>
-            <>
-           <div className="stock-info">
+            <div className="stock-info">
             
             <span>🍎</span>
-            <span className="stock-name">
-              {stockName.replace('.NS', '') || "Stock Name"}
+            <span>
+              <span>Stock Name:-  </span>
+              <span className="stock-names">
+                {capitalizeFirst(stockName.replace('.NS', '') || "Stock Name")}
               </span>
+            </span>
             <span className="stock-company"></span>
-            <div className="stock-amount"> ₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}</div>
+            <div className="stock-amount"> ₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}
+                  {rawPrices[0].color === 'green' && (
+                    <span style={{ color: 'green' }}> ( +{rawPrices[0].percent_change} )</span> // ⬇
+                  )}
+                  {rawPrices[0].color === 'green' && (
+                    <span style={{ color: 'green' }}> ↑</span> // ⬇
+                  )}
+                  {rawPrices[0].color === 'red' && (
+                    <span style={{ color: 'red', marginLeft: '5px' }}> ( {rawPrices[0].percent_change} )</span> // ⬇
+                  )}
+                  {rawPrices[0].color === 'red' && (
+                    <span style={{ color: 'red', marginLeft: '5px' }}> ↓</span> // ⬇
+                  )}
+                  
+            </div>
           </div>
-            <ResponsiveContainer width="100%" height={400}>
+          <div className="chart-wrapper">
+            <ResponsiveContainer width="100%" height={500}>
 
-                    <LineChart
+                    <LineChart margin={{ top: 10, right: 30, left: 10, }}
                       data={stockData.map(item => ({
                         ...item,
                         historicalPrice: item.type === 'historical' ? item.price : null,
@@ -281,7 +335,7 @@ function StockDashboard() {
                       <YAxis
                         domain={['auto', 'auto']}
                         tickFormatter={(value) => `₹${value.toFixed(2)}`} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip  content={<CustomTooltip />} offset={200} />
                       <Legend />
                       <Line
                         type="monotone"
@@ -300,20 +354,22 @@ function StockDashboard() {
                         name="Predicted Price"
                         connectNulls={true}
                         strokeDasharray="5 5" />
-                      <Brush
+                      <Brush  
                         dataKey="date"
                         height={30}
                         stroke="#8884d8"
                         tickFormatter={(date) => new Date(date).toLocaleDateString()} />
                     </LineChart>
-                  </ResponsiveContainer></></div>)
-  : (
-    <p>No data available</p>
-  )}
+            </ResponsiveContainer>
+          </div>
+            </div>)
+                : (
+                 <p>No data available</p>
+              )}
             </div>
 
             {/* Watchlist */}
-            <div className='watchlist'>
+            {/*<div className='watchlist'>
               <div className="watchlist-header">
                 <h2 className="section-title">My watchlist</h2>
                 <button className="text-2xl font-bold">+</button>
@@ -337,7 +393,8 @@ function StockDashboard() {
                   </div>
                 ))}
               </div>
-            </div>
+            </div>*/}
+
           </div>
         </div>
       </div>

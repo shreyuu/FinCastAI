@@ -27,3 +27,7 @@ dataset/
 *.war
 *.ear
 *.iml
+node_modules/
+dist/
+build/
+.env

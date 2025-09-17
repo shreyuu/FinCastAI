@@ -5,6 +5,7 @@ import NewspaperSec from "./news.tsx";
 import SeggetionSec from "./suggetion.tsx";
 import HomePage from "./HomePage.tsx"
 import StockAnalyzer from "./Indicator.tsx";
+//import SignupForm from "./components/tp.tsx";
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 function App() {
   return (

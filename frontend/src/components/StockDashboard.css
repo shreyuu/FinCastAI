@@ -240,19 +240,30 @@ margin: 8px;
   padding-left: 14px;
 }
 .stock-card{
+ 
 width: 300px;
   margin-right: 50px;
   background: white;
   border-radius: 1.5rem;
-  display: flex
-;
+  display: flex;
   box-shadow: 0 80px 399px rgba(0, 0, 0, 0.1);
   flex-direction: row;
   justify-content: space-around;
   
+  
+}
+.stock-infos{
+  margin: 10px auto;
+  padding-top: 10%;
+  align-items: center;
+}
+.stock-values{
+  margin: 10px auto;
+  align-items: center;
+  padding-top: 10%;
 }
 .stock-cards {
-margin: 10px;
+margin: 20px;
 height: 180px !important;
 display: flex
 ;
@@ -261,10 +272,10 @@ display: flex
 /*chart-container*/
 .chart-container{
   padding:10px;
-  display: flex
-;    margin-right: -1px;
+  display: flex;  
+  margin-right: -1px;
   margin-left: 10px;
-  width: 63vw !important;
+  width: 81vw !important;
   height: 68vh;
   margin-top: 10px;
   background: white;
@@ -272,7 +283,13 @@ display: flex
   box-shadow: 0 80px 399px rgba(0, 0, 0, 0.1);
   flex-direction: column;
   justify-content: space-around;
+  padding-left: 30px; 
 
+}
+.chart-wrapper
+{
+  padding: 20px;
+  margin-left: 10px;
 }
 .chart-header{
   display: flex;
@@ -294,9 +311,19 @@ display: flex
   flex-wrap: nowrap;
   flex-direction: column;
   align-items: stretch;
+  margin-left: 30px;
+  
+  
+}
+.stock-names{
+  font-weight: bold;
+  font-size: 18px;
 }
 .stock-amount{
   align-content: center;
+}
+.CustomTooltip{
+  padding-top: 100px;
 }
 .time-filters{
   display: flex
