@@ -15,7 +15,7 @@ body {
 
 .signup-container {
   min-height: 100vh;
-  width: 99vw; /* Ensures the width matches the viewport width */
+  width: 99vw !important; /* Ensures the width matches the viewport width */
   /*background-color: #FC805C;*/
   background-color:#65A074;
   padding: 1rem;
@@ -24,37 +24,37 @@ body {
   justify-content: center;
   overflow: hidden; /* Prevents horizontal scroll if content overflows */
 }
-.form-container h2 {
+.form-containers h2 {
   color: black;/* Change this to your desired color */
 }
 
 
 .main-content1 {
-  width: 100%;
-  max-width: 1900px;
-  background-color: white;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 3rem;
-  height: 1000px;
-    border: 2px solid;
- border-radius: 50px;
+  width: 100% !important;
+  max-width: 1900px!important;
+  background-color: white!important;
+  margin: 0 auto!important;
+  display: flex!important;
+  flex-direction: row!important;
+  align-items: center!important;
+  gap: 3rem!important;
+  height: 1000px!important;
+    border: 2px solid!important;
+ border-radius: 50px!important;
 }
 
 .left-content {
-  flex: 1;
-  text-align: left;
+  flex: 1 !important;
+  text-align: left !important;
 }
 
 .left-content h1 {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: black;
-  margin-bottom: 1.5rem;
-  padding-left: 275px;
-  padding-top: 50px;
+  font-size: 2.5rem !important;
+  font-weight: bold !important;
+  color: black !important;
+  margin-bottom: 1.5rem !important;
+  padding-left: 275px !important;
+  padding-top: 50px !important;
 }
 
 .left-content p {
@@ -65,22 +65,22 @@ body {
 }
 
 .left-content img {
-    padding-left: 250px;
+  padding-left: 250px;
   max-width: 100%;
   height: 800px;
   width: 800px;
 }
 
-.form-wrapper {
+.form-wrappers {
   flex: 1;
-  width: 100%;
-  max-width: 450px;
+  width: 100% !important;
+  max-width: 500px !important;
   display: flex;
   justify-content: center;
   padding-right: 225px;
 }
 
-.form-container {
+.form-containers {
   background: white;
   padding: 2rem;
   border-radius: 5.5rem;
@@ -90,7 +90,7 @@ body {
   text-align: center;
 }
 
-.form-container h2 {
+.form-containers h2 {
   font-size: 2.5rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
@@ -99,16 +99,16 @@ body {
   font-family: 'Nova Bold', sans-serif;
 }
 
-.form-fields {
+.form-fieldss {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   align-items: center;
 }
 
-.form-fields input,
-.form-fields select {
-  width: 100%;
+.form-fieldss input,
+.form-fieldss select {
+  width: 60% !important;
   background: white;
   color-scheme: black;
   padding: 0.75rem 1rem;
@@ -118,14 +118,16 @@ body {
   text-align: left;
 }
 
-.form-fields input:focus,
-.form-fields select:focus {
+.form-fieldss input:focus,
+.form-fieldss select:focus {
   outline: none;
   border-color: #65A074;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .birth-date {
+  padding-left: 80px;
+  width: 75% !important;
   text-align: center;
 }
 
@@ -144,13 +146,15 @@ body {
   color-scheme: black;
 }
 
-.gender-options {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
+.gender-optionss {
+  width: 100% !important;
+    display: flex;
+    gap: 2rem;
+    padding-left: 10px;
+    flex-direction: row;
+    justify-content: flex-end;
 }
-
-.gender-options label {
+.gender-optionss label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -159,7 +163,7 @@ body {
 }
 
 .submit-btn {
-  width: 100%;
+  width: 60% !important;
   padding: 0.75rem;
   background-color: #65A074;
   color: white;
@@ -227,7 +231,7 @@ body {
     display: none;
   }
 
-  .form-wrapper {
+  .form-wrappers{
     max-width: 100%;
   }
 }

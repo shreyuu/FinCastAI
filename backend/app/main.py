@@ -18,7 +18,10 @@ import numpy as np
 import ta
 import asyncio
 
+from sklearn.ensemble import VotingRegressor
 
+...
+ensemble_model = None
 # API Keys and Configuration for newIo {News sentiment}
 API_KEY = "pub_6830389454d2be3370f4b9fd5786223c9d6ad"
 
@@ -48,6 +51,7 @@ class StockRequest(BaseModel):
     start_date: str
     end_date: str
     forecast_out: int = 7
+    # stock_detail: List[int]
 
 
 class NewsResponse(BaseModel):
@@ -325,14 +329,17 @@ async def predict_stock(data: StockRequest):
 
         # Make predictions
         predictions = svr.predict(last_data_scaled)
-
+        # training lstm + svr model
+        ensemble_model = VotingRegressor(estimators=[("svr", svr)])
+        ensemble_model.fit(X_train_scaled, y_train)
         # Adjust predictions based on sentiment
         sentiment_adjustment = 1 + sentiment_score * 0.1
         predictions *= sentiment_adjustment
 
         # Generate prediction dates
         last_date = max(stock_data.index[-1], pd.Timestamp.today().normalize())
-        prediction_dates = get_next_business_days(last_date, len(predictions))
+        next_day = last_date + BDay(1)
+        prediction_dates = get_next_business_days(next_day, len(predictions))
 
         # Prepare prediction response
         prediction_data = [
@@ -370,6 +377,44 @@ async def predict_stock(data: StockRequest):
         print(data.ticker)
         print(prediction_data)
         # Return the combined data
+        stock_prices = []
+        stock = yf.Ticker(data.ticker)
+        hist = stock.history(period="2d")  # Get last 2 days for comparison
+
+        if len(hist) >= 2:
+            yesterday_close = float(hist["Close"].iloc[-2])
+            current_close = float(hist["Close"].iloc[-1])
+            color = "green" if current_close > yesterday_close else "red"
+            percent_change = ((current_close - yesterday_close) / yesterday_close) * 100
+
+            stock_prices.append(
+                {
+                    "name": data.ticker,
+                    "price": current_close,
+                    "color": color,
+                    "percent_change": round(percent_change, 2),
+                }
+            )
+        elif len(hist) == 1:
+            stock_prices.append(
+                {
+                    "name": data.ticker,
+                    "price": float(hist["Close"].iloc[-1]),
+                    "color": "grey",
+                    "percent_change": 0.0,
+                }
+            )
+        else:
+            stock_prices.append(
+                {
+                    "name": data.ticker,
+                    "price": 0.0,
+                    "color": "grey",
+                    "percent_change": 0.0,
+                }
+            )
+        for i in stock_prices:
+            print(i)
         return {
             "name": data.ticker,
             "data": historical_prices + prediction_data,
@@ -377,6 +422,7 @@ async def predict_stock(data: StockRequest):
             "curprice": float(hist["Close"].iloc[-1]),
             "sentiment_score": float(sentiment_score),
             "adjustment_factor": float(sentiment_score * 0.1),
+            "stock_prices": stock_prices,
         }
 
     except Exception as e:
@@ -390,7 +436,8 @@ async def predict_stock(data: StockRequest):
 @app.get("/stock-prices")
 async def get_stock_prices():
     """
-    Get current stock prices for a predefined list of companies
+    Get current stock prices for a predefined list of companies,
+    along with color indication and percent change from previous day.
     """
     stock_tickers = {
         "TCS": "TCS.NS",
@@ -404,13 +451,42 @@ async def get_stock_prices():
 
         for stock_name, ticker in stock_tickers.items():
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="1d")
+            hist = stock.history(period="2d")  # Get last 2 days for comparison
 
-            if not hist.empty:
-                stock_price = float(hist["Close"].iloc[-1])
-                stock_prices.append({"name": stock_name, "price": stock_price})
+            if len(hist) >= 2:
+                yesterday_close = float(hist["Close"].iloc[-2])
+                current_close = float(hist["Close"].iloc[-1])
+                color = "green" if current_close > yesterday_close else "red"
+                percent_change = (
+                    (current_close - yesterday_close) / yesterday_close
+                ) * 100
+
+                stock_prices.append(
+                    {
+                        "name": stock_name,
+                        "price": current_close,
+                        "color": color,
+                        "percent_change": round(percent_change, 2),
+                    }
+                )
+            elif len(hist) == 1:
+                stock_prices.append(
+                    {
+                        "name": stock_name,
+                        "price": float(hist["Close"].iloc[-1]),
+                        "color": "grey",
+                        "percent_change": 0.0,
+                    }
+                )
             else:
-                stock_prices.append({"name": stock_name, "price": 0.0})
+                stock_prices.append(
+                    {
+                        "name": stock_name,
+                        "price": 0.0,
+                        "color": "grey",
+                        "percent_change": 0.0,
+                    }
+                )
 
         return {"stocks": stock_prices}
 
