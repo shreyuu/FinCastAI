@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Mail, ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
+import { Bell, Mail, ChevronDown, LayoutDashboard, Wallet, Newspaper, BarChart2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import topUpImage from './assets/photo/topUp.png';
 import './newImpact.css'
@@ -8,7 +8,6 @@ function NewspaperSec() {
   const [ticker, setTicker] = useState("");
   const [impact, setImpact] = useState<number | null>(null);
   const [reasons, setReasons] = useState<{ sentiment: string; reason: string }[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
 
   // ✅ Function to fetch news impact from FastAPI
   const fetchNewsImpact = async () => {
@@ -25,13 +24,6 @@ function NewspaperSec() {
       })));
     } catch (error) {
       console.error("Error fetching news impact:", error);
-    }
-  };
-  
-
-  const handleBlur = () => {
-    if (ticker && !ticker.endsWith(".NS")) {
-      setTicker(ticker + ".NS"); // Save with ".NS" on blur
     }
   };
 
