@@ -1,8 +1,8 @@
 import { useState , useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
-import { Bell, Mail, ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
+import { Bell, Mail, ChevronDown, LayoutDashboard, Wallet, Newspaper, BarChart2 } from "lucide-react";
 import './StockDashboard.css';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Add this line
 const date = new Date();
 const formattedDate = date.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit',year: 'numeric' });
 
@@ -123,32 +123,36 @@ function StockDashboard() {
     setRawPrices(data.stock_prices);
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    
-    if (active && payload && payload.length) {
-      
-      const historicalValue = payload.find(p => p.dataKey === 'historicalPrice')?.value;
-      const predictedValue = payload.find(p => p.dataKey === 'predictedPrice')?.value;
-      const value = historicalValue ?? predictedValue;
-      const type = historicalValue ? 'Historical' : 'Predicted';
-      
-      return (
-        <div className="custom-tooltip bg-white p-4 rounded shadow">
-          <p className="date">{new Date(label).toLocaleDateString()}</p>
-          <p className="price">₹{value?.toFixed(2)}</p>
-          <p className="type">{type}</p>
-        </div>
-      );
-    }
-    return null;
-  };
+// Define a type for the tooltip props
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: { dataKey: string; value: number }[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
+  if (active && payload && payload.length) {
+    const historicalValue = payload.find((p: { dataKey: string; value: number }) => p.dataKey === 'historicalPrice')?.value;
+    const predictedValue = payload.find((p: { dataKey: string; value: number }) => p.dataKey === 'predictedPrice')?.value;
+    const value = historicalValue ?? predictedValue;
+    const type = historicalValue ? 'Historical' : 'Predicted';
+
+    return (
+      <div className="custom-tooltip bg-white p-4 rounded shadow">
+        <p className="date">{label ? new Date(label).toLocaleDateString() : ''}</p>
+        <p className="price">₹{value?.toFixed(2)}</p>
+        <p className="type">{type}</p>
+      </div>
+    );
+  }
+  return null;
+};
 
   const handleBlur = () => {
     if (ticker && !ticker.endsWith(".NS")) {
       setTicker(ticker + ".NS"); // Save with ".NS" on blur
     }
   };
-  const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="dashboard-container">
       <div className="dashboard-layout">
@@ -169,10 +173,10 @@ function StockDashboard() {
           <div className='nev-bar'>
             <nav>
               <div className='nev-2ndcontainer'>
-                <div className="nav-item" onClick={() => navigate('/')}>
+                {/* <div className="nav-item" onClick={() => navigate('/')}>
                   <Home className="nav-icon" />
                   <span>Home</span>
-                </div>
+                </div> */}
                 <div className="nav-item" onClick={() => navigate('/dashBoard')}>
                   <LayoutDashboard className="nav-icon" />
                   <span>Dashboard</span>
@@ -185,47 +189,8 @@ function StockDashboard() {
                   <Newspaper className="nav-icon" />
                   <span>News</span>
                 </div>
-
-                <div>
-                      <div 
-                        className="nav-item"
-                        onClick={() => setIsOpen(!isOpen)}
-                      >
-                        <BarChart2 className="nav-icon" />
-                        <span>Stock & fund</span>
-                        {(!isOpen) ?
-                        <ChevronDown className={`ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-45'}`} /> :
-                        <ChevronUp className={`ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-45'}`} />}
-                      </div>
-                      
-                      {isOpen && (
-                        <>
-                          <div className="nav-sub-item">Stock</div>
-                          <div className="nav-sub-item">Cryptocurrency</div>
-                          <div className="nav-sub-item">Mutual Fund</div>
-                          <div className="nav-sub-item">Gold</div>
-                        </>
-                      )}
-                    </div>
               </div>
-              
             </nav>
-              <div className='line'></div>
-              <div className='nav-third-container'>
-                <div className="nav-item">
-                  <Users className="nav-icon" />
-                  <span>Our community</span>
-                </div>
-                <div className="nav-item">
-                  <Settings className="nav-icon" />
-                  <span>Settings</span>
-                </div>
-                <div className="nav-item">
-                  <Phone className="nav-icon" />
-                  <span>Contact us</span>
-                </div>
-              </div>
-
           </div>
         </div>
 

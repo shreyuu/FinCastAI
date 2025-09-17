@@ -74,7 +74,7 @@ function SeggetionSec() {
                 <div>
                   <div className="nav-item" onClick={() => setIsOpen(!isOpen)}>
                     <BarChart2 className="nav-icon" />
-                    <span>Stock & Fund</span>
+                    {/* <span>Stock & Fund</span> */}
                     {isOpen ? <ChevronUp className="ml-auto" /> : <ChevronDown className="ml-auto" />}
                   </div>
                   {isOpen && (

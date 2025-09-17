@@ -44,69 +44,36 @@ function NewspaperSec() {
           <div className='nav-first-container'>
             <div className="logo-container">
               <BarChart2 className="nav-icon" />
-              <span className="logo-text">GoStock</span>
+              <span className="logo-text">EStock</span>
             </div>
 
-            <div className="investment-card">
+            {/* <div className="investment-card">
               <div className="investment-label">Total Investment</div>
               <div className="investment-amount">$5380.90</div>
               <div className="investment-percentage">+18.10%</div>
-            </div>
+            </div> */}
           </div>
-          
           <div className='nev-bar'>
             <nav>
               <div className='nev-2ndcontainer'>
-                <div className="nav-item" onClick={() => navigate('/suggetion')}>
+                {/* <div className="nav-item" onClick={() => navigate('/')}>
                   <Home className="nav-icon" />
                   <span>Home</span>
-                </div>
-                <div className="nav-item" onClick={() => navigate('/dashboard')}>
+                </div> */}
+                <div className="nav-item" onClick={() => navigate('/dashBoard')}>
                   <LayoutDashboard className="nav-icon" />
                   <span>Dashboard</span>
                 </div>
                 <div className="nav-item" onClick={() => navigate('/StockAnalyzer')} >
                   <Wallet className="nav-icon" />
-                  <span>Wallet</span>
+                  <span>Indicators</span>
                 </div>
-                <div className="nav-item" onClick={() => navigate('/news')}>
+                <div className="nav-item"  onClick={() => navigate('/news')}>
                   <Newspaper className="nav-icon" />
                   <span>News</span>
                 </div>
-
-                <div>
-                  <div className="nav-item" onClick={() => setIsOpen(!isOpen)}>
-                    <BarChart2 className="nav-icon" />
-                    <span>Stock & Fund</span>
-                    {isOpen ? <ChevronUp className="ml-auto" /> : <ChevronDown className="ml-auto" />}
-                  </div>
-                  {isOpen && (
-                    <>
-                      <div className="nav-sub-item">Stock</div>
-                      <div className="nav-sub-item">Cryptocurrency</div>
-                      <div className="nav-sub-item">Mutual Fund</div>
-                      <div className="nav-sub-item">Gold</div>
-                    </>
-                  )}
-                </div>
               </div>
             </nav>
-
-            <div className='line'></div>
-            <div className='nav-third-container'>
-              <div className="nav-item">
-                <Users className="nav-icon" />
-                <span>Our community</span>
-              </div>
-              <div className="nav-item">
-                <Settings className="nav-icon" />
-                <span>Settings</span>
-              </div>
-              <div className="nav-item">
-                <Phone className="nav-icon" />
-                <span>Contact us</span>
-              </div>
-            </div>
           </div>
         </div>
 
