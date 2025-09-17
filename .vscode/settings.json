@@ -1,0 +1,21 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "stock_app_local",
+            "group": "Development",
+            "database": "stock_app",
+            "username": "stockuser",
+            "password": "stockpass123",
+            "connectionTimeout": 15000
+        }
+    ]
+}

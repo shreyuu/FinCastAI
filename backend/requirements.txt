@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scikit-learn
+yfinance
+transformers
+torch        # only if model requires it
+ta
+requests
+python-dotenv
