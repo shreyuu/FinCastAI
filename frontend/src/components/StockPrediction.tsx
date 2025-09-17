@@ -1,8 +1,9 @@
 import { useState , useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
-import { Bell, Mail, ChevronDown, LayoutDashboard, Wallet, Newspaper, BarChart2 } from "lucide-react";
+import { Bell, Mail, ChevronDown } from "lucide-react";
 import './StockDashboard.css';
-import { useNavigate } from 'react-router-dom'; // Add this line
+import Sidebar from './Sidebar';
+
 const date = new Date();
 const formattedDate = date.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit',year: 'numeric' });
 
@@ -91,11 +92,20 @@ function capitalizeFirst(str: string): string {
 function StockDashboard() {
   const [ticker, setTicker] = useState("");
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
-  const navigate = useNavigate();
   const [loadingChart, setLoadingChart] = useState(false);
   const [stockName, setStockName] = useState(""); // To store the stock name
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [rawPrices, setRawPrices] = useState<{ name: string; price: number | string; color: string,percent_change:number }[]>([]);
+  const [userName, setUserName] = useState<string>("");
+
+  useEffect(() => {
+    // Example: Retrieve user info from localStorage after login
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user && user.name) {
+      setUserName(user.name);
+    }
+  }, []);
+
   const fetchPredictions = async () => {
     setLoadingChart(true);
     const response = await fetch("http://localhost:8000/predict", {
@@ -157,43 +167,7 @@ const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
     <div className="dashboard-container">
       <div className="dashboard-layout">
         {/* Sidebar */}
-        <div className="sidebar">
-          <div className='nav-first-container'>
-            <div className="logo-container">
-              <BarChart2 className="nav-icon" />
-              <span className="logo-text">EStock</span>
-            </div>
-
-            {/* <div className="investment-card">
-              <div className="investment-label">Total Investment</div>
-              <div className="investment-amount">$5380.90</div>
-              <div className="investment-percentage">+18.10%</div>
-            </div> */}
-          </div>
-          <div className='nev-bar'>
-            <nav>
-              <div className='nev-2ndcontainer'>
-                {/* <div className="nav-item" onClick={() => navigate('/')}>
-                  <Home className="nav-icon" />
-                  <span>Home</span>
-                </div> */}
-                <div className="nav-item" onClick={() => navigate('/dashBoard')}>
-                  <LayoutDashboard className="nav-icon" />
-                  <span>Dashboard</span>
-                </div>
-                <div className="nav-item" onClick={() => navigate('/StockAnalyzer')} >
-                  <Wallet className="nav-icon" />
-                  <span>Indicators</span>
-                </div>
-                <div className="nav-item"  onClick={() => navigate('/news')}>
-                  <Newspaper className="nav-icon" />
-                  <span>News</span>
-                </div>
-              </div>
-            </nav>
-          </div>
-        </div>
-
+        <Sidebar />
         {/* Main Content */}
         <div className="main-content">
           {/* Header */}
@@ -218,7 +192,7 @@ const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
               <Bell />
               <div className="profile">
                 <div className="profile-image"></div>
-                <span>Airlangga Mahesa</span>
+                <span>{userName || "Guest"}</span>
                 <ChevronDown />
               </div>
             </div>
