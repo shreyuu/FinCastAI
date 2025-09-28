@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './SignIn.css';
 import investmentImage from './assets/photo/potosss.jpg';
 import { useNavigate } from 'react-router-dom';
 
@@ -55,23 +54,23 @@ const SignInPage = () => {
   };
 
   return (
-    <div className="signup-container">
-      <div className="main-content2">
+    <div className="min-h-screen w-screen bg-primary p-4 flex items-center justify-center overflow-hidden">
+      <div className="w-full max-w-7xl bg-white m-0 flex flex-row items-center gap-12 h-screen border-2 border-black rounded-3xl">
         {/* Left side content */}
-        <div className="left-content">
-          <h1>Trade Your Plan Not Emotion!</h1>
-          <p>Join our community of investors and share your investment journey</p>
-          <img src={investmentImage} alt="Investment illustration" />
+        <div className="flex-1 text-left">
+          <h1 className="text-4xl font-bold text-black mb-6 pl-72 pt-12">Trade Your Plan Not Emotion!</h1>
+          <p className="text-black -mt-4 mb-8 pl-80">Join our community of investors and share your investment journey</p>
+          <img src={investmentImage} alt="Investment illustration" className="pl-64 max-w-full h-screen w-screen" />
         </div>
 
         {/* Right side form */}
-        <div className="form-wrapper">
-          <div className="form-container">
-            <h2>Welcome back</h2>
-            <p>Welcome back! Please enter your details.</p>
+        <div className="flex-1 w-full max-w-md flex justify-center pr-56">
+          <div className="bg-white p-8 rounded-3xl h-96 shadow-2xl shadow-black/10 w-full text-center">
+            <h2 className="text-4xl font-semibold mb-2 text-center font-nova-bold text-black">Welcome back</h2>
+            <p className="text-black">Welcome back! Please enter your details.</p>
             <form onSubmit={handleSubmit}>
-              <label htmlFor="email">Email</label>
-              <div className="form-fields">
+              <label htmlFor="email" className="block text-left w-24 font-bold mt-2.5 mr-96 text-black">Email</label>
+              <div className="flex flex-col gap-4 items-center">
                 <input
                   type="email"
                   id="email"
@@ -80,9 +79,10 @@ const SignInPage = () => {
                   required
                   value={formData.email}
                   onChange={handleInputChange}
+                  className="w-full bg-white text-black px-4 py-3 border border-gray-300 rounded-lg text-base text-left focus:outline-none focus:border-primary focus:shadow-lg focus:shadow-blue-100"
                 />
 
-                <label htmlFor="password">Password</label>
+                <label htmlFor="password" className="block text-left w-24 font-bold mt-2.5 mr-96 text-black">Password</label>
                 <input
                   type="password"
                   id="password"
@@ -91,15 +91,16 @@ const SignInPage = () => {
                   required
                   value={formData.password}
                   onChange={handleInputChange}
+                  className="w-full bg-white text-black px-4 py-3 border border-gray-300 rounded-lg text-base text-left focus:outline-none focus:border-primary focus:shadow-lg focus:shadow-blue-100"
                 />
               </div>
 
-              <a href="#" className="forgot-password">Forgot password</a>
+              <a href="#" className="text-right w-full block my-2.5 text-primary no-underline">Forgot password</a>
 
-              <button type="submit" className="submit-btn">Login</button>
+              <button type="submit" className="w-full py-3 bg-primary text-white border-none rounded-3xl text-base cursor-pointer transition-colors hover:bg-primary">Login</button>
 
-              <button className="google-btn">
-                <svg viewBox="0 0 24 24" className="google-icon">
+              <button className="w-full py-3 bg-white border border-gray-300 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-5 h-5">
                   <path fill="#EA4335" d="M12 5.04c1.44 0 2.88.49 4.13 1.46l3.01-3.02C17.12 1.77 14.63.85 12 .85c-4.1 0-7.65 2.34-9.38 5.75l3.52 2.73c.84-2.51 3.18-4.29 5.86-4.29z"/>
                   <path fill="#34A853" d="M23.15 12.34c0-.81-.07-1.59-.21-2.34H12v4.42h6.29c-.27 1.44-1.09 2.66-2.32 3.48l3.36 2.61c1.96-1.82 3.09-4.49 3.09-7.67z"/>
                   <path fill="#FBBC05" d="M5.14 14.48c-.21-.63-.33-1.31-.33-2.01c0-.7.12-1.37.33-2.01l-3.52-2.73c-.72 1.44-1.12 3.06-1.12 4.74s.4 3.3 1.12 4.74l3.52-2.73z"/>
@@ -107,9 +108,9 @@ const SignInPage = () => {
                 </svg>
               </button>
             </form>
-             {loginMessage && <div className="login-message">{loginMessage}</div>}
+             {loginMessage && <div className={`mt-2.5 p-2.5 text-center rounded-lg text-sm transition-opacity duration-500 ${loginMessage.includes('successful') ? 'bg-white text-green-500' : 'bg-red-500 text-white'}`}>{loginMessage}</div>}
 
-            <p>Don't have an account? <a href="#" onClick={() => navigate('/about')}>Sign up for free</a></p>
+            <p className="text-gray-600 text-sm mb-4">Don't have an account? <a href="#" onClick={() => navigate('/about')} className="text-primary no-underline font-bold">Sign up for free</a></p>
           </div>
         </div>
       </div>

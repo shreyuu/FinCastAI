@@ -2,105 +2,77 @@ import { useState } from "react";
 import { Bell, Mail, ChevronDown, Home, LayoutDashboard, Wallet, Newspaper, BarChart2, Users, Settings, Phone, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import topUpImage from './assets/photo/topUp.png';
-import './newImpact.css'
 function SeggetionSec() {
   const navigate = useNavigate();
-  const [ticker, setTicker] = useState("");
-  const [impact, setImpact] = useState<number | null>(null);
-  const [reasons, setReasons] = useState<{ sentiment: string; reason: string }[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  // ✅ Function to fetch news impact from FastAPI
-  const fetchNewsImpact = async () => {
-    if (!ticker) return;
-    try {
-      const response = await fetch(`http://localhost:8000/news-impact/${ticker}`);
-      const data = await response.json();
-      setImpact(data.impact);
-      setReasons(data.reasons.map((r: [number, string]) => ({
-        sentiment: r[0] > 0 ? "Positive" : r[0] < 0 ? "Negative" : "Neutral",
-        reason: r[1]
-      })));
-    } catch (error) {
-      console.error("Error fetching news impact:", error);
-    }
-  };
-
-  const handleBlur = () => {
-    if (ticker && !ticker.endsWith(".NS")) {
-      setTicker(ticker + ".NS"); // Save with ".NS" on blur
-    }
-  };
-
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-layout">
-        
+    <div className="text-black flex flex-row w-screen h-screen overflow-hidden bg-secondary">
+      <div className="font-inter flex overflow-x-hidden bg-white text-secondary">
         {/* Sidebar */}
-        <div className="sidebar">
-          <div className='nav-first-container'>
-            <div className="logo-container">
-              <BarChart2 className="nav-icon" />
-              <span className="logo-text">GoStock</span>
+        <div className="w-70 bg-white h-screen p-6 flex flex-col justify-start">
+          <div className="h-60 mb-8">
+            <div className="flex items-center gap-3 mb-10 pl-2">
+              <BarChart2 className="w-6 h-6" />
+              <span className="text-sm font-medium">GoStock</span>
             </div>
 
-            <div className="investment-card">
-              <div className="investment-label">Total Investment</div>
-              <div className="investment-amount">$5380.90</div>
-              <div className="investment-percentage">+18.10%</div>
+            <div className="bg-black text-white rounded-xl p-6 mb-8">
+              <div className="text-sm">Total Investment</div>
+              <div className="text-2xl font-bold">$5380.90</div>
+              <div className="text-green-500">+18.10%</div>
             </div>
           </div>
           
-          <div className='nev-bar'>
+          <div className="h-96">
             <nav>
-              <div className='nev-2ndcontainer'>
-                <div className="nav-item" onClick={() => navigate('/suggetion')}>
-                  <Home className="nav-icon" />
+              <div className="h-96">
+                <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/suggetion')}>
+                  <Home className="w-5 h-5" />
                   <span>Home</span>
                 </div>
-                <div className="nav-item" onClick={() => navigate('/dashboard')}>
-                  <LayoutDashboard className="nav-icon" />
+                <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/dashboard')}>
+                  <LayoutDashboard className="w-5 h-5" />
                   <span>Dashboard</span>
                 </div>
-                <div className="nav-item">
-                  <Wallet className="nav-icon" />
+                <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer">
+                  <Wallet className="w-5 h-5" />
                   <span>Wallet</span>
                 </div>
-                <div className="nav-item" onClick={() => navigate('/news')}>
-                  <Newspaper className="nav-icon" />
+                <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/news')}>
+                  <Newspaper className="w-5 h-5" />
                   <span>News</span>
                 </div>
 
                 <div>
-                  <div className="nav-item" onClick={() => setIsOpen(!isOpen)}>
-                    <BarChart2 className="nav-icon" />
-                    {/* <span>Stock & Fund</span> */}
-                    {isOpen ? <ChevronUp className="ml-auto" /> : <ChevronDown className="ml-auto" />}
+                  <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+                    <BarChart2 className="w-5 h-5" />
+                    {isOpen ? <ChevronUp className="ml-auto w-4 h-4" /> : <ChevronDown className="ml-auto w-4 h-4" />}
                   </div>
                   {isOpen && (
-                    <>
-                      <div className="nav-sub-item">Stock</div>
-                      <div className="nav-sub-item">Cryptocurrency</div>
-                      <div className="nav-sub-item">Mutual Fund</div>
-                      <div className="nav-sub-item">Gold</div>
-                    </>
+                    <div className="ml-10 space-y-2">
+                      <div className="px-5 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">Stock</div>
+                      <div className="px-5 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">Cryptocurrency</div>
+                      <div className="px-5 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">Mutual Fund</div>
+                      <div className="px-5 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">Gold</div>
+                    </div>
                   )}
                 </div>
               </div>
             </nav>
 
-            <div className='line'></div>
-            <div className='nav-third-container'>
-              <div className="nav-item">
-                <Users className="nav-icon" />
+            <div className="border-t border-gray-200 my-4"></div>
+            <div className="mt-auto pt-6">
+              <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer">
+                <Users className="w-5 h-5" />
                 <span>Our community</span>
               </div>
-              <div className="nav-item">
-                <Settings className="nav-icon" />
+              <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer">
+                <Settings className="w-5 h-5" />
                 <span>Settings</span>
               </div>
-              <div className="nav-item">
-                <Phone className="nav-icon" />
+              <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer">
+                <Phone className="w-5 h-5" />
                 <span>Contact us</span>
               </div>
             </div>
@@ -108,17 +80,17 @@ function SeggetionSec() {
         </div>
 
         {/* Main Content */}
-        <div className="main-content">
+        <div className="h-screen w-5/6 flex overflow-y-scroll overflow-x-hidden flex-col bg-secondary border-none">
           {/* Header */}
-          <div className="search-bar">
-          <img src={topUpImage} alt="Search Icon" className="search-image" />
-            <div className="header-actions">
-              <Mail />
-              <Bell />
-              <div className="profile">
-                <div className="profile-image"></div>
-                <span>Airlangga Mahesa</span>
-                <ChevronDown />
+          <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+            <img src={topUpImage} alt="Search Icon" className="w-8 h-8" />
+            <div className="flex items-center space-x-4">
+              <Mail className="w-5 h-5 text-gray-600" />
+              <Bell className="w-5 h-5 text-gray-600" />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
+                <span className="text-sm font-medium">Airlangga Mahesa</span>
+                <ChevronDown className="w-4 h-4 text-gray-600" />
               </div>
             </div>
           </div>

@@ -4,26 +4,26 @@ import { useNavigate } from 'react-router-dom';
 const Sidebar = () => {
   const navigate = useNavigate();
   return (
-    <div className="sidebar">
-      <div className='nav-first-container'>
-        <div className="logo-container">
-          <BarChart2 className="nav-icon" />
-          <span className="logo-text">EStock</span>
+    <div className="w-70 bg-white h-screen p-6 flex flex-col justify-start">
+      <div className="h-60 mb-8">
+        <div className="flex items-center gap-3 mb-10 pl-2">
+          <BarChart2 className="w-6 h-6" />
+          <span className="text-sm font-medium">EStock</span>
         </div>
       </div>
-      <div className='nev-bar'>
+      <div className="h-96">
         <nav>
-          <div className='nev-2ndcontainer'>
-            <div className="nav-item" onClick={() => navigate('/dashBoard')}>
-              <LayoutDashboard className="nav-icon" />
+          <div className="h-96">
+            <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/dashBoard')}>
+              <LayoutDashboard className="w-5 h-5" />
               <span>Dashboard</span>
             </div>
-            <div className="nav-item" onClick={() => navigate('/StockAnalyzer')}>
-              <Wallet className="nav-icon" />
+            <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/StockAnalyzer')}>
+              <Wallet className="w-5 h-5" />
               <span>Indicators</span>
             </div>
-            <div className="nav-item" onClick={() => navigate('/news')}>
-              <Newspaper className="nav-icon" />
+            <div className="flex items-center gap-4 px-5 py-3 rounded-xl my-1 text-sm transition-colors hover:bg-gray-100 cursor-pointer" onClick={() => navigate('/news')}>
+              <Newspaper className="w-5 h-5" />
               <span>News</span>
             </div>
           </div>
