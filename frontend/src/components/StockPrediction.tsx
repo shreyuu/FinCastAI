@@ -1,7 +1,6 @@
 import { useState , useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
 import { Bell, Mail, ChevronDown } from "lucide-react";
-import './StockDashboard.css';
 import Sidebar from './Sidebar';
 
 const date = new Date();
@@ -43,37 +42,37 @@ const StockCards = () => {
   }, []);
 
   return (
-    <div className="stock-cards">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {loading ? (
         <p>Loading stocks...</p>
       ) : (
         stocks.map((stock) => (
-          <div key={stock.name} className="stock-card">
-            <div className="stock-infos">
-              <span>{stock.name}</span>
+          <div key={stock.name} className="bg-white rounded-lg shadow-md p-4 border border-gray-200 hover:shadow-lg transition-shadow">
+            <div className="mb-2">
+              <span className="font-semibold text-gray-800">{stock.name}</span>
             </div>
-            <div className="stock-values">
-              <div><strong>Current Price</strong></div>
-              <div className="stock-amount"  style={{ color: stock.color }}>
+            <div className="space-y-1">
+              <div className="text-sm text-gray-600"><strong>Current Price</strong></div>
+              <div className={`text-lg font-bold ${stock.color === 'red' ? 'text-red-600' : 'text-green-600'}`}>
                 ₹{typeof stock.price === 'number' ? stock.price.toFixed(2) : parseFloat(stock.price).toFixed(2)}
                   {stock.color === 'red' && (
-                    <span style={{ color: 'red', marginLeft: '5px' }}> ↓</span> // ⬇
+                    <span className="text-red-600 ml-1"> ↓</span>
                   )}
                   {stock.color === 'green' && (
-                    <span style={{ color: 'green' }}> ↑</span> // ⬇
+                    <span className="text-green-600 ml-1"> ↑</span>
                   )}
               </div>
               <div>
                   {
                     stock.color ==='red' && 
                     (
-                      <span style={{ color: 'red', marginLeft: '5px' }}>({stock.percent_change}%)</span> 
+                      <span className="text-red-600 ml-1">({stock.percent_change}%)</span> 
                     ) 
                   }
                   {
                     stock.color ==='green' && 
                     (
-                      <span style={{ color: 'green', marginLeft: '5px' }}>(+{stock.percent_change}%)</span> 
+                      <span className="text-green-600 ml-1">(+{stock.percent_change}%)</span> 
                     ) 
                   }
               </div>
@@ -148,10 +147,10 @@ const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
     const type = historicalValue ? 'Historical' : 'Predicted';
 
     return (
-      <div className="custom-tooltip bg-white p-4 rounded shadow">
-        <p className="date">{label ? new Date(label).toLocaleDateString() : ''}</p>
-        <p className="price">₹{value?.toFixed(2)}</p>
-        <p className="type">{type}</p>
+      <div className="bg-white p-4 rounded-lg shadow-lg border">
+        <p className="text-sm text-gray-600">{label ? new Date(label).toLocaleDateString() : ''}</p>
+        <p className="text-lg font-semibold text-gray-800">₹{value?.toFixed(2)}</p>
+        <p className="text-xs text-gray-500">{type}</p>
       </div>
     );
   }
@@ -164,96 +163,83 @@ const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
     }
   };
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-layout">
+    <div className="text-black flex flex-row w-screen h-screen overflow-hidden bg-secondary">
+      <div className="font-inter flex overflow-x-hidden bg-white text-secondary">
         {/* Sidebar */}
         <Sidebar />
         {/* Main Content */}
-        <div className="main-content">
+        <div className="h-screen w-5/6 flex overflow-y-scroll overflow-x-hidden flex-col bg-secondary border-none">
           {/* Header */}
-          <div className="search-bar">
-            <div className='search'>
+          <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+            <div className='flex items-center space-x-2'>
               <input
                 type="text"
                 value={ticker.replace(".NS", "")}
                 onChange={(e) => setTicker(e.target.value)}
                 onBlur={handleBlur}
                 placeholder="Search for various stocks........"
-                className="search-input"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
               />
-              <button onClick={fetchPredictions} className="search-button">
+              <button onClick={fetchPredictions} className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-search" viewBox="0 0 16 16">
                   <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
                 </svg>
               </button>
             </div>
-            <div className="header-actions">
-              <Mail />
-              <Bell />
-              <div className="profile">
-                <div className="profile-image"></div>
-                <span>{userName || "Guest"}</span>
-                <ChevronDown />
+            <div className="flex items-center space-x-4">
+              <Mail className="w-5 h-5 text-gray-600" />
+              <Bell className="w-5 h-5 text-gray-600" />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
+                <span className="text-sm font-medium">{userName || "Guest"}</span>
+                <ChevronDown className="w-4 h-4 text-gray-600" />
               </div>
             </div>
           </div>
 
           {/* Portfolio Section */}
-          <h2 className="section-title">My Portfolio</h2>
-          <div className="portfolio-section">
-            
+          <h2 className="text-xl font-semibold m-2 pl-4">My Portfolio</h2>
+          <div className="p-4">
             <StockCards />
-            
           </div>
 
-          <div className='chart-watchlist-container'>
+          <div className='flex gap-6 -mt-2 h-70vh'>
             {/* Chart Section */}
-            <div className="chart-container">
-              <div className="chart-header">
-                {/*
-                <div className="time-filters">
-                <button className="time-filter">1 Day</button>
-                <button className="time-filter active">1 Week</button>
-                <button className="time-filter">1 Month</button>
-                <button className="time-filter">3 Month</button>
-                <button className="time-filter">6 Month</button>
-                <button className="time-filter">1 Year</button>
-                <button className="time-filter">5 Year</button>
-                <button className="time-filter">All</button>
-                </div>*/}
+            <div className="flex-1 bg-white rounded-lg shadow-md p-6">
+              <div className="mb-4">
+                {/* Time filters can be added here if needed */}
               </div>
               
               {loadingChart ? (
             <p>Loading chart...</p>
           ) : stockData.length > 0 ? (
             <div>
-            <div className="stock-info">
+            <div className="flex items-center space-x-4 mb-4">
             
-            <span>🍎</span>
-            <span>
+            <span className="text-2xl">🍎</span>
+            <span className="text-lg">
               <span>Stock Name:-  </span>
-              <span className="stock-names">
+              <span className="font-bold text-lg">
                 {capitalizeFirst(stockName.replace('.NS', '') || "Stock Name")}
               </span>
             </span>
-            <span className="stock-company"></span>
-            <div className="stock-amount"> ₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}
-                  {rawPrices[0].color === 'green' && (
-                    <span style={{ color: 'green' }}> ( +{rawPrices[0].percent_change} )</span> // ⬇
+            <div className="text-lg font-semibold"> ₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}
+                  {rawPrices[0]?.color === 'green' && (
+                    <span className="text-green-600"> ( +{rawPrices[0].percent_change} )</span>
                   )}
-                  {rawPrices[0].color === 'green' && (
-                    <span style={{ color: 'green' }}> ↑</span> // ⬇
+                  {rawPrices[0]?.color === 'green' && (
+                    <span className="text-green-600"> ↑</span>
                   )}
-                  {rawPrices[0].color === 'red' && (
-                    <span style={{ color: 'red', marginLeft: '5px' }}> ( {rawPrices[0].percent_change} )</span> // ⬇
+                  {rawPrices[0]?.color === 'red' && (
+                    <span className="text-red-600 ml-1"> ( {rawPrices[0].percent_change} )</span>
                   )}
-                  {rawPrices[0].color === 'red' && (
-                    <span style={{ color: 'red', marginLeft: '5px' }}> ↓</span> // ⬇
+                  {rawPrices[0]?.color === 'red' && (
+                    <span className="text-red-600 ml-1"> ↓</span>
                   )}
                   
             </div>
           </div>
-          <div className="chart-wrapper">
+          <div className="w-full">
             <ResponsiveContainer width="100%" height={500}>
 
                     <LineChart margin={{ top: 10, right: 30, left: 10, }}
@@ -307,32 +293,7 @@ const CustomTooltip = ({ active, payload = [], label }: CustomTooltipProps) => {
               )}
             </div>
 
-            {/* Watchlist */}
-            {/*<div className='watchlist'>
-              <div className="watchlist-header">
-                <h2 className="section-title">My watchlist</h2>
-                <button className="text-2xl font-bold">+</button>
-              </div>
-              <div className='watchlist-content'>
-                {watchlist.map((stock) => (
-                  <div key={stock.name} className="watchlist-item">
-                    <div className="watchlist-stock">
-                      <div className="stock-icon">{stock.name[0]}</div>
-                      <div className="stock-details">
-                        <div className="stock-name">{stock.name}</div>
-                        <div className="stock-company">{stock.company}</div>
-                      </div>
-                    </div>
-                    <div className="stock-price">
-                      <div className="stock-current">{stock.value}</div>
-                      <div className={stock.change.startsWith('+') ? 'change-positive' : 'change-negative'}>
-                        {stock.change}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>*/}
+            {/* Watchlist can be added here if needed */}
 
           </div>
         </div>

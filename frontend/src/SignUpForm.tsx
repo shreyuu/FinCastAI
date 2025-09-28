@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import './SignUp.css'; // Add your styling
 import investmentImage from './assets/photo/potosss.jpg'; // Add image path
 
 const SignupPage = () => {
@@ -82,19 +81,19 @@ const SignupPage = () => {
   };
 
   return (
-    <div className="signup-container">
-      <div className="main-content1">
-        <div className="left-content">
-          <h1>Trade Your Plan Not Emotion!</h1>
-          <p>Join our community of investors and share your investment journey</p>
-          <img src={investmentImage} alt="Investment illustration" />
+    <div className="min-h-screen w-screen bg-primary p-4 flex items-center justify-center overflow-hidden">
+      <div className="w-full max-w-7xl bg-white m-0 flex flex-row items-center gap-12 h-screen border-2 border-black rounded-3xl">
+        <div className="flex-1 text-left">
+          <h1 className="text-4xl font-bold text-black mb-6 pl-72 pt-12">Trade Your Plan Not Emotion!</h1>
+          <p className="text-black -mt-4 mb-8 pl-80">Join our community of investors and share your investment journey</p>
+          <img src={investmentImage} alt="Investment illustration" className="pl-64 max-w-full h-screen w-screen" />
         </div>
 
-        <div className="form-wrappers">
-          <div className="form-containers">
-            <h2>Get started</h2>
+        <div className="flex-1 w-full max-w-lg flex justify-center pr-56">
+          <div className="bg-white p-8 rounded-3xl h-96 shadow-2xl shadow-black/10 w-full text-center">
+            <h2 className="text-4xl font-semibold mb-6 text-center font-nova-bold text-black">Get started</h2>
             <form onSubmit={handleSubmit}>
-              <div className="form-fieldss">
+              <div className="flex flex-col gap-4 items-center">
                 <input
                   type="text"
                   name="name"
@@ -102,6 +101,7 @@ const SignupPage = () => {
                   onChange={handleInputChange}
                   value={formData.name}
                   required
+                  className="w-3/5 bg-white text-black px-4 py-3 border border-gray-300 rounded-lg text-base text-left focus:outline-none focus:border-primary focus:shadow-lg focus:shadow-blue-100"
                 />
 
                 <input
@@ -111,6 +111,7 @@ const SignupPage = () => {
                   onChange={handleInputChange}
                   value={formData.email}
                   required
+                  className="w-3/5 bg-white text-black px-4 py-3 border border-gray-300 rounded-lg text-base text-left focus:outline-none focus:border-primary focus:shadow-lg focus:shadow-blue-100"
                 />
 
                 <input
@@ -120,16 +121,18 @@ const SignupPage = () => {
                   onChange={handleInputChange}
                   value={formData.password}
                   required
+                  className="w-3/5 bg-white text-black px-4 py-3 border border-gray-300 rounded-lg text-base text-left focus:outline-none focus:border-primary focus:shadow-lg focus:shadow-blue-100"
                 />
 
-                <div className="birth-date">
-                  <label>Date Of Birth</label>
-                  <div className="date-selects">
+                <div className="pl-20 w-3/4 text-center">
+                  <label className="block mb-2 text-black text-sm">Date Of Birth</label>
+                  <div className="grid grid-cols-3 gap-2 text-black">
                     <select 
                       name="birth_day" 
                       onChange={handleInputChange} 
                       value={formData.birthDate.day} 
                       required
+                      className="bg-white text-black px-2 py-2 border border-gray-300 rounded-lg text-sm text-left focus:outline-none focus:border-primary"
                     >
                       <option value="">DD</option>
                       {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
@@ -143,6 +146,7 @@ const SignupPage = () => {
                       onChange={handleInputChange} 
                       value={formData.birthDate.month} 
                       required
+                      className="bg-white text-black px-2 py-2 border border-gray-300 rounded-lg text-sm text-left focus:outline-none focus:border-primary"
                     >
                       <option value="">MM</option>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
@@ -156,6 +160,7 @@ const SignupPage = () => {
                       onChange={handleInputChange} 
                       value={formData.birthDate.year} 
                       required
+                      className="bg-white text-black px-2 py-2 border border-gray-300 rounded-lg text-sm text-left focus:outline-none focus:border-primary"
                     >
                       <option value="">YYYY</option>
                       {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(year => (
@@ -167,8 +172,8 @@ const SignupPage = () => {
                   </div>
                 </div>
 
-                <div className="gender-optionss">
-                  <label>
+                <div className="w-full flex gap-8 pl-2.5 flex-row justify-end">
+                  <label className="flex items-center gap-2 text-gray-600 text-sm">
                     <input
                       type="radio"
                       name="gender"
@@ -179,7 +184,7 @@ const SignupPage = () => {
                     />
                     <span>Male</span>
                   </label>
-                  <label>
+                  <label className="flex items-center gap-2 text-gray-600 text-sm">
                     <input
                       type="radio"
                       name="gender"
@@ -191,7 +196,7 @@ const SignupPage = () => {
                   </label>
                 </div>
 
-                <button type="submit" onClick={handleSubmit} className="submit-btn" >
+                <button type="submit" onClick={handleSubmit} className="w-3/5 py-3 bg-primary text-white border-none rounded-3xl text-base cursor-pointer transition-colors hover:bg-primary">
                   Sign up to Vexter
                 </button>
               </div>
