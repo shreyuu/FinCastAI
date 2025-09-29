@@ -1,10 +1,31 @@
+import { useEffect, useState } from 'react';
 import { BarChart2 } from 'lucide-react';
 import stockVideo from "./assets/video/Pinterest media.mp4";
 import imageLogo from "./assets/photo/reliance.logo.webp";
 import { useNavigate } from 'react-router-dom';
 
+interface StockCardData {
+  name: string;
+  price: number;
+  color: string;
+  percent_change: number;
+}
+
 function HomePage() {
   const navigate = useNavigate();
+  const [stockCards, setStockCards] = useState<StockCardData[]>([]);
+  const [loadingStocks, setLoadingStocks] = useState(true);
+
+  useEffect(() => {
+    // Fetch real-time stock prices from backend
+    fetch("http://localhost:8000/stock-prices")
+      .then((response) => response.json())
+      .then((data) => {
+        setStockCards(data.stocks || []);
+        setLoadingStocks(false);
+      })
+      .catch(() => setLoadingStocks(false));
+  }, []);
 
   return (
     <div className="min-h-screen w-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex flex-col items-center justify-center relative overflow-hidden">
@@ -51,16 +72,27 @@ function HomePage() {
             />
             <button className="btn-primary px-8 py-2 font-semibold">Search</button>
           </div>
-          {/* Featured Stock Card */}
-          <div className="mt-12 relative w-96 h-40 bg-white rounded-2xl shadow-lg border border-gray-200 flex flex-col justify-center items-start p-6 animate-fade-slide-up" style={{ animationDelay: '1s' }}>
-            <img src={imageLogo} alt="Reliance Logo" className="absolute left-4 top-4 w-16 h-16 rounded-full shadow" />
-            <span className="ml-24 text-2xl font-bold">Reliance</span>
-            <span className="ml-24 text-lg text-red-500 font-semibold">-1.03%</span>
-            <div className="flex items-end gap-2 ml-24 mt-2">
-              <span className="text-xl font-bold">₹1,253</span>
-              <span className="text-sm text-gray-500">.65</span>
-              <span className="ml-4 px-2 py-1 bg-red-100 text-red-600 rounded-lg text-sm">🔻-13.05</span>
-            </div>
+          {/* Real-time Stock Cards */}
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl animate-fade-slide-up" style={{ animationDelay: '1s' }}>
+            {loadingStocks ? (
+              <div className="text-gray-500">Loading stocks...</div>
+            ) : (
+              stockCards.map((stock) => (
+                <div key={stock.name} className="relative w-96 h-40 bg-white rounded-2xl shadow-lg border border-gray-200 flex flex-col justify-center items-start p-6">
+                  <img src={imageLogo} alt={`${stock.name} Logo`} className="absolute left-4 top-4 w-16 h-16 rounded-full shadow" />
+                  <span className="ml-24 text-2xl font-bold">{stock.name}</span>
+                  <span className={`ml-24 text-lg font-semibold ${stock.color === 'red' ? 'text-red-500' : 'text-green-500'}`}>
+                    {stock.percent_change > 0 ? `+${stock.percent_change}%` : `${stock.percent_change}%`}
+                  </span>
+                  <div className="flex items-end gap-2 ml-24 mt-2">
+                    <span className="text-xl font-bold">₹{stock.price.toFixed(2)}</span>
+                    <span className="ml-4 px-2 py-1 bg-red-100 text-red-600 rounded-lg text-sm">
+                      {stock.color === 'red' ? `🔻${stock.percent_change}` : `🔺${stock.percent_change}`}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
