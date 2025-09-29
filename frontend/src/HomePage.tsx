@@ -33,7 +33,7 @@ function HomePage() {
       <header className="w-full flex items-center justify-between px-16 py-6 bg-white shadow-md fixed top-0 left-0 z-30">
         <div className="flex items-center gap-4">
           <BarChart2 className="text-4xl text-primary" />
-          <span className="text-3xl font-bold font-calibri text-primary">GoStock</span>
+          <span className="text-3xl font-bold font-calibri text-primary">FinCastAI</span>
         </div>
         <nav className="flex gap-8">
           <button
@@ -52,41 +52,41 @@ function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="flex flex-row items-center justify-center w-full h-screen pt-32">
+      <section className="flex flex-row items-center justify-center w-full h-screen pt-20">
         {/* Left: Animated Headline & Search */}
-        <div className="flex flex-col justify-center items-start w-1/2 pl-24 relative">
-          <h1 className="text-6xl font-extrabold text-gray-900 mb-6 leading-tight animate-fade-slide-up">
+        <div className="flex flex-col justify-center items-start w-2/3 pl-12 relative">
+          <h1 className="text-5xl font-extrabold text-gray-900 mb-4 leading-tight animate-fade-slide-up">
             Make Better <br />
             Investment <br />
             Decisions With <br />
             <span className="text-primary">Alternative Data.</span>
           </h1>
-          <p className="text-xl text-gray-600 mb-8 animate-fade-slide-up" style={{ animationDelay: '0.5s' }}>
+          <p className="text-lg text-gray-600 mb-6 animate-fade-slide-up" style={{ animationDelay: '0.5s' }}>
             Get the inside scoop on companies like never before.
           </p>
-          <div className="flex gap-4 w-full max-w-lg animate-fade-slide-up" style={{ animationDelay: '0.7s' }}>
+          <div className="flex gap-2 w-full max-w-md animate-fade-slide-up" style={{ animationDelay: '0.7s' }}>
             <input
               type="text"
               placeholder="Search for stocks (e.g. Reliance, TCS)..."
               className="input-field flex-1"
             />
-            <button className="btn-primary px-8 py-2 font-semibold">Search</button>
+            <button className="btn-primary px-6 py-2 font-semibold">Search</button>
           </div>
           {/* Real-time Stock Cards */}
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl animate-fade-slide-up" style={{ animationDelay: '1s' }}>
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-2 w-full max-w-2xl animate-fade-slide-up" style={{ animationDelay: '1s' }}>
             {loadingStocks ? (
-              <div className="text-gray-500">Loading stocks...</div>
+              <div className="text-gray-500 text-base">Loading stocks...</div>
             ) : (
               stockCards.map((stock) => (
-                <div key={stock.name} className="relative w-96 h-40 bg-white rounded-2xl shadow-lg border border-gray-200 flex flex-col justify-center items-start p-6">
-                  <img src={imageLogo} alt={`${stock.name} Logo`} className="absolute left-4 top-4 w-16 h-16 rounded-full shadow" />
-                  <span className="ml-24 text-2xl font-bold">{stock.name}</span>
-                  <span className={`ml-24 text-lg font-semibold ${stock.color === 'red' ? 'text-red-500' : 'text-green-500'}`}>
+                <div key={stock.name} className="relative w-64 h-24 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col justify-center items-start p-3">
+                  <img src={imageLogo} alt={`${stock.name} Logo`} className="absolute left-3 top-3 w-8 h-8 rounded-full shadow" />
+                  <span className="ml-14 text-lg font-bold">{stock.name}</span>
+                  <span className={`ml-14 text-sm font-semibold ${stock.color === 'red' ? 'text-red-500' : 'text-green-500'}`}>
                     {stock.percent_change > 0 ? `+${stock.percent_change}%` : `${stock.percent_change}%`}
                   </span>
-                  <div className="flex items-end gap-2 ml-24 mt-2">
-                    <span className="text-xl font-bold">₹{stock.price.toFixed(2)}</span>
-                    <span className="ml-4 px-2 py-1 bg-red-100 text-red-600 rounded-lg text-sm">
+                  <div className="flex items-end gap-1 ml-14 mt-1">
+                    <span className="text-base font-bold">₹{stock.price.toFixed(2)}</span>
+                    <span className="ml-2 px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs">
                       {stock.color === 'red' ? `🔻${stock.percent_change}` : `🔺${stock.percent_change}`}
                     </span>
                   </div>
@@ -97,17 +97,17 @@ function HomePage() {
         </div>
 
         {/* Right: Video & CTA */}
-        <div className="flex flex-col items-center justify-center w-1/2 relative">
-          <div className="w-96 h-96 rounded-3xl overflow-hidden shadow-xl animate-fade-slide-up" style={{ animationDelay: '1.2s' }}>
+        <div className="flex flex-col items-center justify-center w-1/3 relative">
+          <div className="w-80 h-80 rounded-3xl overflow-hidden shadow-xl animate-fade-slide-up" style={{ animationDelay: '1.2s' }}>
             <video width="100%" height="100%" autoPlay loop muted>
               <source src={stockVideo} type="video/mp4" />
             </video>
           </div>
-          <div className="mt-8 text-center animate-fade-slide-up" style={{ animationDelay: '1.5s' }}>
-            <h2 className="text-3xl font-bold text-primary mb-2">Join our investor community</h2>
-            <p className="text-gray-700 mb-4">Share your investment journey and learn from others.</p>
+          <div className="mt-6 text-center animate-fade-slide-up" style={{ animationDelay: '1.5s' }}>
+            <h2 className="text-2xl font-bold text-primary mb-2">Join our investor community</h2>
+            <p className="text-gray-700 mb-3">Share your investment journey and learn from others.</p>
             <button
-              className="btn-primary px-8 py-3 font-semibold text-lg"
+              className="btn-primary px-6 py-2 font-semibold text-base"
               onClick={() => navigate('/about')}
             >
               Get Started
