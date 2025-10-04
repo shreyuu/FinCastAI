@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
 import Sidebar from "./Sidebar";
-import { Bell, Mail, ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
 function capitalizeFirst(str: string): string {
   if (!str) return "";
@@ -73,10 +73,10 @@ const StockDashboard = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
           <div className="flex items-center space-x-2">
-            <Mail className="w-5 h-5 text-gray-600" />
-            <Bell className="w-5 h-5 text-gray-600" />
+            {/* <Mail className="w-5 h-5 text-gray-600" /> */}
+            {/* <Bell className="w-5 h-5 text-gray-600" /> */}
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
+              {/* <div className="w-8 h-8 bg-gray-300 rounded-full"></div> */}
               <span className="text-sm font-medium">{userName || "Guest"}</span>
               <ChevronDown className="w-4 h-4 text-gray-600" />
             </div>
@@ -121,8 +121,31 @@ const StockDashboard = () => {
             />
             <button
               onClick={fetchPredictions}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-colors">
-              Search
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors
+    bg-primary text-black shadow-md
+    hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2
+    ${loadingChart ? "opacity-60 cursor-not-allowed" : ""}
+  `}
+              disabled={loadingChart}>
+              {loadingChart ? (
+                <svg className="animate-spin h-5 w-5 text-black" viewBox="0 0 24 24">
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+              ) : (
+                <>
+                  <Search className="w-5 h-5" />
+                  Search
+                </>
+              )}
             </button>
           </div>
           <div className="flex items-center space-x-4 mb-4">
