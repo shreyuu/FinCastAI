@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
 import Sidebar from "./Sidebar";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, Newspaper, Wallet } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function capitalizeFirst(str: string): string {
   if (!str) return "";
@@ -26,6 +27,7 @@ const StockDashboard = () => {
     { name: string; price: number | string; color: string; percent_change: number }[]
   >([]);
   const [userName, setUserName] = useState<string>("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -73,10 +75,22 @@ const StockDashboard = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
           <div className="flex items-center space-x-2">
-            {/* <Mail className="w-5 h-5 text-gray-600" /> */}
-            {/* <Bell className="w-5 h-5 text-gray-600" /> */}
+            <span className="text-xl font-bold text-primary tracking-wide">FinCastAI Dashboard</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-100 text-primary font-semibold hover:bg-blue-200"
+              onClick={() => navigate("/news")}>
+              <Newspaper className="w-5 h-5" />
+              News
+            </button>
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-100 text-green-700 font-semibold hover:bg-green-200"
+              onClick={() => navigate("/StockAnalyzer")}>
+              <Wallet className="w-5 h-5" />
+              Indicators
+            </button>
             <div className="flex items-center space-x-2">
-              {/* <div className="w-8 h-8 bg-gray-300 rounded-full"></div> */}
               <span className="text-sm font-medium">{userName || "Guest"}</span>
               <ChevronDown className="w-4 h-4 text-gray-600" />
             </div>
@@ -98,35 +112,34 @@ const StockDashboard = () => {
               {topMovers.map((stock, idx) => (
                 <li
                   key={idx}
-                  className={`flex items-center gap-2 ${stock.color === "green" ? "text-green-600" : "text-red-600"}`}>
-                  <span>{stock.name}</span>
-                  <span>{stock.price}</span>
-                  <span>{stock.percent_change > 0 ? `+${stock.percent_change}%` : `${stock.percent_change}%`}</span>
+                  className={`text-sm font-medium ${stock.color === "green" ? "text-green-600" : "text-red-600"}`}>
+                  {stock.name}: {stock.percent_change > 0 ? "+" : ""}
+                  {stock.percent_change}%
                 </li>
               ))}
             </ul>
           </div>
         </div>
 
-        {/* Stock Search & Chart */}
-        <div className="flex flex-col gap-6 p-6">
+        {/* Prediction Chart Section */}
+        <div className="w-full bg-white rounded-lg shadow-md p-6 mt-6 mx-4">
           <div className="flex items-center gap-4 mb-4">
             <input
               type="text"
-              value={ticker.replace(".NS", "")}
+              placeholder="Enter Stock Ticker (e.g. TCS.NS)"
+              className="input-field w-64"
+              value={ticker}
               onChange={(e) => setTicker(e.target.value)}
               onBlur={handleBlur}
-              placeholder="Search for stocks..."
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
             />
             <button
-              onClick={fetchPredictions}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors
-    bg-primary text-black shadow-md
-    hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2
-    ${loadingChart ? "opacity-60 cursor-not-allowed" : ""}
-  `}
-              disabled={loadingChart}>
+                bg-primary text-black shadow-md
+                hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2
+                ${loadingChart ? "opacity-60 cursor-not-allowed" : ""}
+              `}
+              disabled={loadingChart}
+              onClick={fetchPredictions}>
               {loadingChart ? (
                 <svg className="animate-spin h-5 w-5 text-black" viewBox="0 0 24 24">
                   <circle
@@ -147,14 +160,10 @@ const StockDashboard = () => {
                 </>
               )}
             </button>
-          </div>
-          <div className="flex items-center space-x-4 mb-4">
-            <span className="text-2xl">📈</span>
-            <span className="text-lg">
-              <span>Stock Name: </span>
-              <span className="font-bold text-lg">{capitalizeFirst(stockName.replace(".NS", "") || "Stock Name")}</span>
+            <span className="font-bold text-lg ml-4">
+              {stockName ? capitalizeFirst(stockName.replace(".NS", "")) : "Stock Name"}
             </span>
-            <div className="text-lg font-semibold">
+            <span className="text-lg font-semibold ml-2">
               ₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}
               {rawPrices[0]?.color === "green" && (
                 <span className="text-green-600"> (+{rawPrices[0].percent_change}) ↑</span>
@@ -162,88 +171,86 @@ const StockDashboard = () => {
               {rawPrices[0]?.color === "red" && (
                 <span className="text-red-600 ml-1"> ({rawPrices[0].percent_change}) ↓</span>
               )}
-            </div>
+            </span>
           </div>
-          <div className="w-full bg-white rounded-lg shadow-md p-6">
-            {loadingChart ? (
-              <p>Loading chart...</p>
-            ) : stockData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={500}>
-                <LineChart
-                  margin={{ top: 10, right: 30, left: 10 }}
-                  data={stockData.map((item) => ({
-                    ...item,
-                    historicalPrice: item.type === "historical" ? item.price : null,
-                    predictedPrice: item.type === "prediction" ? item.price : null,
-                    date: item.date,
-                  }))}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(date) => new Date(date).toLocaleDateString()}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis domain={["auto", "auto"]} tickFormatter={(value) => `₹${value.toFixed(2)}`} />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        const historicalValue = payload.find((p) => p.dataKey === "historicalPrice")?.value;
-                        const predictedValue = payload.find((p) => p.dataKey === "predictedPrice")?.value;
-                        const value =
-                          typeof historicalValue === "number"
-                            ? historicalValue
-                            : typeof predictedValue === "number"
-                            ? predictedValue
-                            : null;
-                        const type = typeof historicalValue === "number" ? "Historical" : "Predicted";
-                        return (
-                          <div className="bg-white p-4 rounded-lg shadow-lg border">
-                            <p className="text-sm text-gray-600">{label ? new Date(label).toLocaleDateString() : ""}</p>
-                            <p className="text-lg font-semibold text-gray-800">
-                              ₹{typeof value === "number" ? value.toFixed(2) : "N/A"}
-                            </p>
-                            <p className="text-xs text-gray-500">{type}</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                    offset={200}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="historicalPrice"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Historical Price"
-                    connectNulls={true}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="predictedPrice"
-                    stroke="#FF9933"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Predicted Price"
-                    connectNulls={true}
-                    strokeDasharray="5 5"
-                  />
-                  <Brush
-                    dataKey="date"
-                    height={30}
-                    stroke="#8884d8"
-                    tickFormatter={(date) => new Date(date).toLocaleDateString()}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p>No data available</p>
-            )}
-          </div>
+          {loadingChart ? (
+            <p>Loading chart...</p>
+          ) : stockData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={500}>
+              <LineChart
+                margin={{ top: 10, right: 30, left: 10 }}
+                data={stockData.map((item) => ({
+                  ...item,
+                  historicalPrice: item.type === "historical" ? item.price : null,
+                  predictedPrice: item.type === "prediction" ? item.price : null,
+                  date: item.date,
+                }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis domain={["auto", "auto"]} tickFormatter={(value) => `₹${value.toFixed(2)}`} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const historicalValue = payload.find((p) => p.dataKey === "historicalPrice")?.value;
+                      const predictedValue = payload.find((p) => p.dataKey === "predictedPrice")?.value;
+                      const value =
+                        typeof historicalValue === "number"
+                          ? historicalValue
+                          : typeof predictedValue === "number"
+                          ? predictedValue
+                          : null;
+                      const type = typeof historicalValue === "number" ? "Historical" : "Predicted";
+                      return (
+                        <div className="bg-white p-4 rounded-lg shadow-lg border">
+                          <p className="text-sm text-gray-600">{label ? new Date(label).toLocaleDateString() : ""}</p>
+                          <p className="text-lg font-semibold text-gray-800">
+                            ₹{typeof value === "number" ? value.toFixed(2) : "N/A"}
+                          </p>
+                          <p className="text-xs text-gray-500">{type}</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  offset={200}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="historicalPrice"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Historical Price"
+                  connectNulls={true}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="predictedPrice"
+                  stroke="#FF9933"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Predicted Price"
+                  connectNulls={true}
+                  strokeDasharray="5 5"
+                />
+                <Brush
+                  dataKey="date"
+                  height={30}
+                  stroke="#8884d8"
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p>No data available</p>
+          )}
         </div>
       </div>
     </div>
