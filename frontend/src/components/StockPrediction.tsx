@@ -17,6 +17,13 @@ interface StockDataPoint {
   name: string;
 }
 
+const ZOOM_LEVELS = [
+  { label: "All Time", value: "all" },
+  { label: "Year", value: "year" },
+  { label: "Month", value: "month" },
+  { label: "Week", value: "week" },
+];
+
 const StockDashboard = () => {
   const [ticker, setTicker] = useState("");
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
@@ -27,6 +34,7 @@ const StockDashboard = () => {
     { name: string; price: number | string; color: string; percent_change: number }[]
   >([]);
   const [userName, setUserName] = useState<string>("");
+  const [zoom, setZoom] = useState("month");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -63,6 +71,27 @@ const StockDashboard = () => {
     if (ticker && !ticker.endsWith(".NS")) {
       setTicker(ticker + ".NS");
     }
+  };
+
+  // Helper to filter data by zoom level
+  const getFilteredData = () => {
+    if (zoom === "all") return stockData;
+    const now = new Date();
+    let cutoff: Date;
+    switch (zoom) {
+      case "year":
+        cutoff = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        break;
+      case "month":
+        cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      case "week":
+        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        break;
+      default:
+        cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    }
+    return stockData.filter((item) => new Date(item.date) >= cutoff);
   };
 
   // Top movers logic (example: sort by percent_change)
@@ -172,14 +201,27 @@ const StockDashboard = () => {
                 <span className="text-red-600 ml-1"> ({rawPrices[0].percent_change}) ↓</span>
               )}
             </span>
+            <select
+              value={zoom}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setZoom(e.target.value)}
+              className="flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors
+                bg-primary text-black shadow-md
+                hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+              style={{ minWidth: 120 }}>
+              {ZOOM_LEVELS.map((z) => (
+                <option key={z.value} value={z.value}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
           </div>
           {loadingChart ? (
             <p>Loading chart...</p>
-          ) : stockData.length > 0 ? (
+          ) : getFilteredData().length > 0 ? (
             <ResponsiveContainer width="100%" height={500}>
               <LineChart
                 margin={{ top: 10, right: 30, left: 10 }}
-                data={stockData.map((item) => ({
+                data={getFilteredData().map((item) => ({
                   ...item,
                   historicalPrice: item.type === "historical" ? item.price : null,
                   predictedPrice: item.type === "prediction" ? item.price : null,
