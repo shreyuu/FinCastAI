@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, ResponsiveContainer, Legend } from "recharts";
 import Sidebar from "./Sidebar";
 import { ChevronDown, Search, Newspaper, Wallet } from "lucide-react";
@@ -35,6 +35,8 @@ const StockDashboard = () => {
   >([]);
   const [userName, setUserName] = useState<string>("");
   const [zoom, setZoom] = useState("month");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -97,6 +99,23 @@ const StockDashboard = () => {
   // Top movers logic (example: sort by percent_change)
   const topMovers = rawPrices.slice(0, 5).sort((a, b) => Math.abs(b.percent_change) - Math.abs(a.percent_change));
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    setUserName("");
+    navigate("/login"); // Change to your login route
+  };
+
   return (
     <div className="text-black flex flex-row w-screen h-screen overflow-hidden bg-secondary">
       <Sidebar />
@@ -119,9 +138,22 @@ const StockDashboard = () => {
               <Wallet className="w-5 h-5" />
               Indicators
             </button>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium">{userName || "Guest"}</span>
-              <ChevronDown className="w-4 h-4 text-gray-600" />
+            <div className="relative" ref={dropdownRef}>
+              <button
+                className="flex items-center space-x-2 focus:outline-none"
+                onClick={() => setDropdownOpen((open) => !open)}>
+                <span className="text-sm font-medium">{userName || "Guest"}</span>
+                <ChevronDown className="w-4 h-4 text-gray-600" />
+              </button>
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-lg z-10">
+                  <button
+                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                    onClick={handleLogout}>
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
