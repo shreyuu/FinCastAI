@@ -1,17 +1,15 @@
 import StockPrediction from "./components/StockPrediction.tsx";
-import SignUpForm from '../src/SignUpForm';
-import SignInPage from '../src/SignIn';
+import SignUpForm from "../src/SignUpForm";
+import SignInPage from "../src/SignIn";
 import NewspaperSec from "./news.tsx";
 import SeggetionSec from "./suggetion.tsx";
-import HomePage from "./HomePage.tsx"
+import HomePage from "./HomePage.tsx";
 import StockAnalyzer from "./Indicator.tsx";
+import Portfolio from "./Portfolio";
 //import SignupForm from "./components/tp.tsx";
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 function App() {
   return (
-    // <div className="p-6">
-    //   <StockAnalyzer/>
-    // </div>
     <Router>
       <Routes>
         <Route path="/about" element={<SignUpForm />} />
@@ -20,7 +18,8 @@ function App() {
         <Route path="/dashBoard" element={<StockPrediction />} />
         <Route path="/news" element={<NewspaperSec />} />
         <Route path="/suggetion" element={<SeggetionSec />} />
-        <Route path="/StockAnalyzer" element={<StockAnalyzer />} />      
+        <Route path="/StockAnalyzer" element={<StockAnalyzer />} />
+        <Route path="/portfolio" element={<Portfolio />} />
       </Routes>
     </Router>
   );
