@@ -6,6 +6,7 @@ const navItems = [
   { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/dashBoard" },
   { label: "Indicators", icon: <Wallet className="w-5 h-5" />, path: "/StockAnalyzer" },
   { label: "News", icon: <Newspaper className="w-5 h-5" />, path: "/news" },
+  { label: "Portfolio", icon: <BarChart2 className="w-5 h-5" />, path: "/portfolio" }, // Add this line
 ];
 
 const Sidebar = () => {
