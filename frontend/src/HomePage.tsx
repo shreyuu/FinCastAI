@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BarChart2 } from "lucide-react";
 import stockVideo from "./assets/video/Pinterest media.mp4";
 import { useNavigate } from "react-router-dom";
+import { backendUrl } from "./services/api";
 
 interface StockCardData {
   name: string;
@@ -18,7 +19,22 @@ function HomePage() {
   const [loadingStocks, setLoadingStocks] = useState(true);
 
   useEffect(() => {
-    // Fetch real-time stock prices from backend
+    // Fetch real-time stock prices from backend and perform a health check
+    fetch(backendUrl("/health"))
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Health check failed: ${res.status}`);
+        }
+        // try to parse JSON if any, otherwise continue
+        return res.json().catch(() => null);
+      })
+      .then((data) => {
+        console.log("backend health:", data);
+      })
+      .catch((err) => {
+        console.warn("Health check error:", err);
+      });
+
     fetch("http://localhost:8000/stock-prices")
       .then((response) => response.json())
       .then((data) => {

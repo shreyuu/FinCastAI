@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Brush, Responsiv
 import Sidebar from "./Sidebar";
 import { ChevronDown, Search, Newspaper, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { backendUrl } from "../services/api";
 
 function capitalizeFirst(str: string): string {
   if (!str) return "";
@@ -46,15 +47,9 @@ const StockDashboard = () => {
 
   const fetchPredictions = async () => {
     setLoadingChart(true);
-    const response = await fetch("http://localhost:8000/predict", {
-      method: "POST",
+    const response = await fetch(backendUrl(`/predict_stock?ticker=${encodeURIComponent(ticker)}`), {
+      method: "GET",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ticker,
-        start_date: "2020-01-01",
-        end_date: new Date().toLocaleDateString("en-CA"),
-        forecast_out: 7,
-      }),
     });
     const data = await response.json();
     if (data.error) {

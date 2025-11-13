@@ -2,7 +2,19 @@
 import { StockRequest, PredictionResponse } from '../types';
 const currentDate = new Date();
 const formattedDate = currentDate.toISOString().split('T')[0];
-const API_BASE_URL = 'http://localhost:8000/api';
+
+export const API = {
+    BACKEND: import.meta.env.VITE_API_URL || "http://localhost:8000",
+    AUTH: import.meta.env.VITE_AUTH_URL || "http://localhost:3001",
+};
+
+export function backendUrl(path: string) {
+    return `${API.BACKEND.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
+export function authUrl(path: string) {
+    return `${API.AUTH.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -20,7 +32,7 @@ export const fetchPredictions = async (ticker: string): Promise<PredictionRespon
       forecast_days: 7
     };
 
-    const response = await fetch(`${API_BASE_URL}/predict`, {
+    const response = await fetch(`${API.BACKEND}/predict`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
