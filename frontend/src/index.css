@@ -13,11 +13,17 @@
 
 @layer components {
   .btn-primary {
-    @apply text-white px-4 py-2 rounded-lg font-medium transition-colors;
-    background-color: #3b82f6; /* static fallback */
+    @apply text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-md;
+    background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%); /* better gradient */
+    box-shadow: 0 6px 18px rgba(59,130,246,0.12);
   }
   .btn-primary:hover {
-    opacity: 0.9;
+    transform: translateY(-1px);
+    opacity: 0.97;
+  }
+  .btn-primary:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(59,130,246,0.18);
   }
 
   .btn-secondary {
@@ -32,6 +38,19 @@
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-md p-6;
+    @apply bg-white rounded-lg shadow-sm p-6 border border-transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(15,23,42,0.06);
+  }
+
+  .skeleton {
+    @apply bg-gray-200 rounded-md animate-pulse;
+    height: 1rem;
+  }
+  .skeleton.card {
+    height: 3.5rem;
   }
 }

@@ -3,6 +3,12 @@ import { Loader2 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 // import topUpImage from "./assets/photo/topUp.png";
 
+const backendUrl = (path: string) => {
+  // Use environment variable if provided, otherwise default to localhost:8000
+  const base = (process.env.REACT_APP_BACKEND_URL as string) || "http://localhost:8000";
+  return `${base}${path}`;
+};
+
 interface NewsReason {
   sentiment: string;
   reason: string;
@@ -25,7 +31,7 @@ function NewspaperSec() {
     setImpact(null);
     setReasons([]);
     try {
-      const response = await fetch(`http://localhost:8000/news-impact/${encodeURIComponent(company)}`);
+      const response = await fetch(backendUrl(`/news-impact/${encodeURIComponent(company)}`));
       const data = await response.json();
       setImpact(data.impact);
       setReasons(
@@ -131,6 +137,14 @@ function NewspaperSec() {
 
           {impact === null && !loading && (
             <div className="mt-6 text-center text-gray-500">Enter a company and ticker to see news impact.</div>
+          )}
+
+          {loading && (
+            <div className="grid gap-4">
+              <div className="skeleton card" />
+              <div className="skeleton card" />
+              <div className="skeleton card" />
+            </div>
           )}
         </div>
       </div>
