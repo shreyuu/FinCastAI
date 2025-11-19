@@ -24,8 +24,9 @@ const Sidebar = () => {
   return (
     <aside
       className={`h-screen bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-lg flex flex-col justify-between py-8 transition-all duration-300 ${
-        collapsed ? "w-16 px-2" : "w-50 px-6"
-      }`}>
+        collapsed ? "w-16 px-2" : "w-64 px-6"
+      }`}
+      aria-label="Main navigation">
       {/* Logo & Collapse Button */}
       <div>
         <div className="flex items-center justify-between mb-12">
@@ -36,12 +37,13 @@ const Sidebar = () => {
           <button
             className="ml-auto p-1 rounded hover:bg-blue-100"
             onClick={() => setCollapsed((v: boolean) => !v)}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-pressed={collapsed}>
             {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
         </div>
         {/* Navigation */}
-        <nav>
+        <nav role="navigation" aria-label="Sidebar navigation">
           <ul className="space-y-2">
             {navItems.map((item) => (
               <li key={item.path}>
@@ -50,7 +52,7 @@ const Sidebar = () => {
                   className={`w-full flex items-center gap-4 px-2 py-3 rounded-xl text-base font-medium transition-colors
                     ${
                       location.pathname === item.path
-                        ? "bg-primary text-blue-500 shadow"
+                        ? "bg-primary text-white shadow"
                         : "text-gray-700 hover:bg-blue-100 hover:text-primary"
                     }
                   `}
