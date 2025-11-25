@@ -65,17 +65,23 @@ FinCastAI/
 - **Python 3.7+**: Core programming language
 - **Pandas & NumPy**: Data manipulation and numerical computing
 - **Scikit-learn**: Machine learning library (SVR, SVC, StandardScaler)
+- **Transformers**: State-of-the-art machine learning for NLP
+- **Torch**: Tensor library for deep learning, required by Transformers
 - **FinBERT**: Pre-trained financial sentiment analysis model (`yiyanghkust/finbert-tone`)
 - **yfinance**: Yahoo Finance API for stock data
 - **ta**: Technical analysis library
+- **requests**: HTTP library for making API calls
+- **python-dotenv**: Environment variable management
 - **NewsData.io API**: Real-time news fetching
 
 ### Frontend
 
-- **React 18**: User interface library
+- **React 19**: User interface library
 - **TypeScript**: Type-safe JavaScript
 - **Vite**: Fast build tool and development server
 - **Tailwind CSS**: Utility-first CSS framework
+- **@mui/material**: Material UI component library
+- **lucide-react**: Icon library
 - **Recharts**: Charting library for data visualization
 - **Axios**: HTTP client for API requests
 - **React Router**: Client-side routing
@@ -85,7 +91,10 @@ FinCastAI/
 - **Node.js + Express**: Authentication server
 - **TypeScript**: Type-safe backend
 - **MySQL**: User database
-- **bcrypt**: Password hashing (Note: Currently using plain text - needs implementation)
+- **bcryptjs**: Library for hashing passwords
+- **body-parser**: Node.js body parsing middleware
+- **cors**: Middleware for enabling Cross-Origin Resource Sharing
+- **dotenv**: Environment variable management
 
 ## 📋 Prerequisites
 
@@ -128,7 +137,7 @@ FinCastAI/
 
    ```env
    NEWS_API_KEY=your_newsdata_io_api_key
-   FINBERT_MODEL=ProsusAI/finbert
+   FINBERT_MODEL=yiyanghkust/finbert-tone
    HOST=0.0.0.0
    PORT=8000
    DEBUG=True
@@ -381,7 +390,6 @@ This application is for educational and research purposes only. It should not be
 
 ## 🔮 Future Enhancements
 
-- [ ] Implement proper bcrypt password hashing in authentication
 - [ ] Real-time WebSocket data streaming
 - [ ] More ML models (LSTM, Random Forest, XGBoost)
 - [ ] Advanced portfolio analytics and recommendations
