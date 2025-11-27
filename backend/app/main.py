@@ -12,7 +12,7 @@ from datetime import datetime
 import requests
 from transformers import pipeline
 from pandas.tseries.offsets import BDay
-from typing import List, Dict
+from typing import List, Dict, Optional  # ensure Optional is available
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import ta
 import asyncio
@@ -409,6 +409,35 @@ def predict_stock_impact(stock_request: StockRequest2):
         "OBV": round(stock_data["OBV"], 2),
         "trade_decision": trade_signal,
     }
+
+
+# ============================================================
+# Add simple health endpoint for frontend /health checks
+# ============================================================
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# Provide a lightweight GET wrapper so frontend code using GET /predict_stock can still work.
+# This constructs the expected request model and delegates to the existing POST handler.
+@app.get("/predict_stock")
+async def predict_stock_get(
+    ticker: str,
+    start_date: str = "2020-01-01",
+    end_date: Optional[str] = None,
+    forecast_out: int = 7,
+):
+    if end_date is None:
+        end_date = datetime.today().strftime("%Y-%m-%d")
+    # Use the same Pydantic model that the POST /predict endpoint expects
+    req = StockRequest(
+        ticker=ticker,
+        start_date=start_date,
+        end_date=end_date,
+        forecast_out=forecast_out,
+    )
+    return await predict_stock(req)
 
 
 # ============================================================

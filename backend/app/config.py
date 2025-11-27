@@ -48,6 +48,25 @@ class Config:
     # === Debugging / Logging ===
     DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 
+    # Add default stock tickers used by the API
+    STOCK_TICKERS = {
+        "TCS": "TCS.NS",
+        "Tata Steel": "TATASTEEL.NS",
+        "Reliance": "RELIANCE.NS",
+        "ICICI Bank": "ICICIBANK.NS",
+        "Infosys": "INFY.NS",
+        "HDFC Bank": "HDFCBANK.NS",
+        "Bharti Airtel": "BHARTIARTL.NS",
+        "Hindustan Unilever": "HINDUNILVR.NS",
+        "Asian Paints": "ASIANPAINT.NS",
+        "Maruti Suzuki": "MARUTI.NS",
+        "State Bank of India": "SBIN.NS",
+        "Larsen & Toubro": "LT.NS",
+        "Bajaj Finance": "BAJFINANCE.NS",
+        "Kotak Mahindra Bank": "KOTAKBANK.NS",
+        "Sun Pharma": "SUNPHARMA.NS",
+    }
+
     @classmethod
     def summary(cls):
         """Prints key configuration values for debugging"""
