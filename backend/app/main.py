@@ -16,7 +16,6 @@ from typing import List, Dict, Optional  # ensure Optional is available
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import ta
 import asyncio
-from sklearn.ensemble import VotingRegressor
 
 # ============================================================
 # Configuration Import
@@ -113,48 +112,44 @@ def fetch_news(company: str) -> List[str]:
         return []
 
 
+def _signed_sentiment_scores(news_list: List[str]) -> List[float]:
+    """Run FinBERT once over the batch and return per-article signed scores.
+
+    Positive articles yield +score, negative yield -score, neutral yield 0.
+    """
+    results = sentiment_pipeline(news_list)
+    scores = []
+    for result in results:
+        label = result["label"]
+        score = result["score"]
+        if label == "positive":
+            scores.append(score)
+        elif label == "negative":
+            scores.append(-score)
+        else:
+            scores.append(0.0)
+    return scores
+
+
 def analyze_sentiment1(news_list: List[str]) -> float:
-    """Lightweight sentiment scoring"""
+    """Lightweight sentiment scoring (mean signed FinBERT score)."""
     if not news_list:
         return 0.0
-
     try:
-        sentiments = []
-        for news in news_list:
-            result = sentiment_pipeline(news)[0]
-            sentiment = result["label"]
-            score = result["score"]
-
-            if sentiment == "positive":
-                sentiments.append(score)
-            elif sentiment == "negative":
-                sentiments.append(-score)
-            else:
-                sentiments.append(0)
-        return float(np.mean(sentiments)) if sentiments else 0.0
+        scores = _signed_sentiment_scores(news_list)
+        return float(np.mean(scores)) if scores else 0.0
     except Exception as e:
         print(f"Error analyzing sentiment: {str(e)}")
         return 0.0
 
 
 def analyze_sentiment(news_list: List[str]) -> float:
-    """Detailed sentiment analysis"""
+    """Detailed sentiment analysis, scaled for the news-impact endpoint."""
     if not news_list:
         return 0.0
     try:
-        sentiments = []
-        for news in news_list:
-            result = sentiment_pipeline(news)[0]
-            sentiment = result["label"]
-            score = result["score"]
-            if sentiment == "positive":
-                sentiment_score = score * 10
-            elif sentiment == "negative":
-                sentiment_score = -score * 10
-            else:
-                sentiment_score = 0.0
-            sentiments.append(sentiment_score)
-        avg_sentiment = float(np.mean(sentiments)) if sentiments else 0.0
+        scores = _signed_sentiment_scores(news_list)
+        avg_sentiment = float(np.mean(scores)) * 10 if scores else 0.0
         return round(avg_sentiment * 2, 2)
     except Exception as e:
         print(f"Error analyzing sentiment: {str(e)}")
@@ -216,13 +211,20 @@ async def predict_stock(data: StockRequest):
 
         # Prepare training data
         features = ["Open", "High", "Low", "Close", "Volume"]
+        feature_cols = features + ["Sentiment"]
         stock_data["Sentiment"] = sentiment_score
         stock_data["Target"] = stock_data["Close"].shift(-data.forecast_out)
-        stock_data.fillna(method="ffill", inplace=True)
-        stock_data.dropna(inplace=True)
 
-        X = stock_data[features + ["Sentiment"]].values
-        y = stock_data["Target"].values
+        # Fill gaps in feature columns only; do NOT fabricate target labels.
+        stock_data[feature_cols] = stock_data[feature_cols].ffill()
+
+        # Train only on rows that have a real (known) future target.
+        train_data = stock_data.dropna(subset=feature_cols + ["Target"])
+        if train_data.empty:
+            return {"error": "Not enough data to train the model"}
+
+        X = train_data[feature_cols].values
+        y = train_data["Target"].values
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
@@ -234,10 +236,8 @@ async def predict_stock(data: StockRequest):
         svr = SVR(kernel="rbf", C=1e3, gamma=0.1)
         svr.fit(X_train_scaled, y_train)
 
-        ensemble_model = VotingRegressor(estimators=[("svr", svr)])
-        ensemble_model.fit(X_train_scaled, y_train)
-
-        last_data = stock_data[features + ["Sentiment"]].tail(data.forecast_out).values
+        # Forecast from the most recent rows (whose targets are not yet known).
+        last_data = stock_data[feature_cols].tail(data.forecast_out).values
         last_data_scaled = scaler.transform(last_data)
         predictions = svr.predict(last_data_scaled)
 
@@ -261,7 +261,17 @@ async def predict_stock(data: StockRequest):
         rmse = np.sqrt(mse)
         mae = mean_absolute_error(y_test, y_pred_test)
         r2 = r2_score(y_test, y_pred_test)
-        mape = np.mean(np.abs((y_test - y_pred_test) / y_test)) * 100
+        # Guard against division by zero in MAPE (skip zero-priced targets).
+        nonzero = y_test != 0
+        if np.any(nonzero):
+            mape = (
+                np.mean(
+                    np.abs((y_test[nonzero] - y_pred_test[nonzero]) / y_test[nonzero])
+                )
+                * 100
+            )
+        else:
+            mape = float("nan")
 
         print("\n==== MODEL EVALUATION METRICS ====")
         print(
@@ -355,19 +365,25 @@ async def news_impact(company: str):
                 "impact": 0.0,
                 "reasons": ["No relevant news found."],
             }
-        impact = analyze_sentiment(news_list)
+
+        # Run the (slow) FinBERT pipeline once per article and reuse the results.
+        results = sentiment_pipeline(news_list)
+
+        label_to_text = {"positive": "[Positive]", "negative": "[Negative]"}
+        scores = []
         reasons = []
-        for news in news_list:
-            result = sentiment_pipeline(news)[0]
-            sentiment_label = result["label"]
+        for news, result in zip(news_list, results):
+            label = result["label"]
             score = result["score"]
-            if sentiment_label == "positive":
-                sentiment_text = "[Positive]"
-            elif sentiment_label == "negative":
-                sentiment_text = "[Negative]"
+            if label == "positive":
+                scores.append(score * 10)
+            elif label == "negative":
+                scores.append(-score * 10)
             else:
-                sentiment_text = "[Neutral]"
-            reasons.append(f"{sentiment_text} {news[:150]}...")
+                scores.append(0.0)
+            reasons.append(f"{label_to_text.get(label, '[Neutral]')} {news[:150]}...")
+
+        impact = round(float(np.mean(scores)) * 2, 2) if scores else 0.0
         return {"company": company, "impact": float(impact), "reasons": reasons}
     except Exception as e:
         return {"error": f"Failed to analyze news impact: {str(e)}"}
