@@ -13,9 +13,8 @@ class Config:
     """Centralized configuration for the backend application"""
 
     # === API Keys ===
-    NEWS_API_KEY = os.getenv(
-        "NEWS_API_KEY", "pub_6830389454d2be3370f4b9fd5786223c9d6ad"  # default fallback
-    )
+    # No hardcoded fallback — set NEWS_API_KEY in the environment / .env file.
+    NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
     # === Model Configuration ===
     FINBERT_MODEL = os.getenv("FINBERT_MODEL", "ProsusAI/finbert")
@@ -71,7 +70,8 @@ class Config:
     def summary(cls):
         """Prints key configuration values for debugging"""
         print(f"Loaded .env from: {ENV_PATH}")
-        print(f"NEWS_API_KEY: {cls.NEWS_API_KEY[:10]}...")
+        masked_key = f"{cls.NEWS_API_KEY[:10]}..." if cls.NEWS_API_KEY else "(not set)"
+        print(f"NEWS_API_KEY: {masked_key}")
         print(f"DATABASE_URL: {cls.DATABASE_URL}")
         print(f"HOST: {cls.HOST}")
         print(f"PORT: {cls.PORT}")
