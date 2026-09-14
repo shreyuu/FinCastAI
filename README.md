@@ -22,14 +22,10 @@ A full-stack web application that provides comprehensive stock market analysis u
 FinCastAI/
 ├── backend/                    # FastAPI backend application
 │   ├── app/
-│   │   ├── __init__.py        # FastAPI app initialization
-│   │   ├── main.py            # Main API endpoints
+│   │   ├── __init__.py        # Package marker
+│   │   ├── main.py            # All API endpoints, models and sentiment analysis
 │   │   ├── config.py          # Centralized configuration
-│   │   ├── models.py          # Pydantic models
-│   │   ├── indicators.py      # Technical indicators implementation
-│   │   ├── FinBert.py         # Financial sentiment analysis
-│   │   ├── svm.py             # SVM model implementation
-│   │   └── EQUITY_L.csv       # Stock symbols dataset
+│   │   └── svm.py             # SVR/SVC research script (not wired to the API)
 │   ├── requirements.txt       # Python dependencies
 │   └── .env                   # Environment variables
 ├── frontend/                   # React + TypeScript frontend
@@ -80,7 +76,6 @@ FinCastAI/
 - **TypeScript**: Type-safe JavaScript
 - **Vite**: Fast build tool and development server
 - **Tailwind CSS**: Utility-first CSS framework
-- **@mui/material**: Material UI component library
 - **lucide-react**: Icon library
 - **Recharts**: Charting library for data visualization
 - **Axios**: HTTP client for API requests
