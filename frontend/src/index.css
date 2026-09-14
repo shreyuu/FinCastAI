@@ -2,6 +2,16 @@
 
 @import "tailwindcss";
 
+/* Tailwind v4 reads its theme from CSS, not tailwind.config.js -- a JS config
+   is only loaded when a stylesheet points at it with @config, which nothing
+   did. That is why text-primary / bg-primary / bg-secondary rendered as
+   nothing. `primary` carries over the value from the old (unused) config;
+   `secondary` was referenced in markup but never defined anywhere. */
+@theme {
+  --color-primary: #3b82f6;
+  --color-secondary: #f1f5f9;
+}
+
 @layer base {
   body {
     font-family: "Inter", sans-serif;
