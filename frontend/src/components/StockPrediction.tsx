@@ -29,6 +29,7 @@ const StockDashboard = () => {
   const [ticker, setTicker] = useState("");
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
   const [loadingChart, setLoadingChart] = useState(false);
+  const [chartError, setChartError] = useState("");
   const [stockName, setStockName] = useState("");
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [rawPrices, setRawPrices] = useState<
@@ -46,22 +47,36 @@ const StockDashboard = () => {
   }, []);
 
   const fetchPredictions = async () => {
-    setLoadingChart(true);
-    const response = await fetch(backendUrl(`/predict_stock?ticker=${encodeURIComponent(ticker)}`), {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await response.json();
-    if (data.error) {
-      window.alert(data.error + " or check the stock name ");
-      setLoadingChart(false);
+    if (!ticker.trim()) {
+      setChartError("Enter a stock ticker, for example TCS.NS.");
       return;
     }
-    setStockData(data.data);
-    setStockName(data.name);
-    setCurrentPrice(data.curprice);
-    setRawPrices(data.stock_prices);
-    setLoadingChart(false);
+    setLoadingChart(true);
+    setChartError("");
+    try {
+      const response = await fetch(backendUrl(`/predict_stock?ticker=${encodeURIComponent(ticker)}`), {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        // The backend distinguishes an unknown ticker (404) from a range too
+        // short to train on (422) and an upstream outage (502); say which.
+        const body = await response.json().catch(() => null);
+        setChartError(body?.detail ?? `Request failed (${response.status}).`);
+        return;
+      }
+
+      const data = await response.json();
+      setStockData(data.data);
+      setStockName(data.name);
+      setCurrentPrice(data.curprice);
+      setRawPrices(data.stock_prices);
+    } catch {
+      setChartError("Could not reach the prediction service. Is the backend running?");
+    } finally {
+      setLoadingChart(false);
+    }
   };
 
   const handleBlur = () => {
@@ -91,8 +106,9 @@ const StockDashboard = () => {
     return stockData.filter((item) => new Date(item.date) >= cutoff);
   };
 
-  // Top movers logic (example: sort by percent_change)
-  const topMovers = rawPrices.slice(0, 5).sort((a, b) => Math.abs(b.percent_change) - Math.abs(a.percent_change));
+  // /predict_stock returns stock_prices for the searched ticker only, so this
+  // is the day's move for that one stock -- not a cross-market movers list.
+  const searchedMove = rawPrices[0];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -158,22 +174,23 @@ const StockDashboard = () => {
           <div>
             <h2 className="text-xl font-bold mb-2">Welcome, {capitalizeFirst(userName)}</h2>
             <p className="text-gray-600">
-              Total Portfolio Value:{" "}
+              Last close{stockName ? ` (${stockName.replace(".NS", "")})` : ""}:{" "}
               <span className="font-semibold">₹{currentPrice ? currentPrice.toFixed(2) : "N/A"}</span>
             </p>
           </div>
           <div>
-            <h3 className="font-semibold mb-1">Top Movers</h3>
-            <ul>
-              {topMovers.map((stock, idx) => (
-                <li
-                  key={idx}
-                  className={`text-sm font-medium ${stock.color === "green" ? "text-green-600" : "text-red-600"}`}>
-                  {stock.name}: {stock.percent_change > 0 ? "+" : ""}
-                  {stock.percent_change}%
-                </li>
-              ))}
-            </ul>
+            <h3 className="font-semibold mb-1">Today's move</h3>
+            {searchedMove ? (
+              <p
+                className={`text-sm font-medium ${
+                  searchedMove.color === "green" ? "text-green-600" : "text-red-600"
+                }`}>
+                {searchedMove.name}: {searchedMove.percent_change > 0 ? "+" : ""}
+                {searchedMove.percent_change}%
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">Search a ticker to see its change.</p>
+            )}
           </div>
         </div>
 
@@ -242,6 +259,13 @@ const StockDashboard = () => {
               ))}
             </select>
           </div>
+          {chartError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {chartError}
+            </div>
+          )}
           {loadingChart ? (
             <p>Loading chart...</p>
           ) : getFilteredData().length > 0 ? (

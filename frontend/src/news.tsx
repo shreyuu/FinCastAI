@@ -21,6 +21,16 @@ function NewspaperSec() {
     setReasons([]);
     try {
       const response = await fetch(backendUrl(`/news-impact/${encodeURIComponent(company)}`));
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setReasons([
+          {
+            sentiment: "Neutral",
+            reason: body?.detail ?? `Request failed (${response.status}).`,
+          },
+        ]);
+        return;
+      }
       const data = await response.json();
       setImpact(data.impact);
       setReasons(
@@ -35,9 +45,15 @@ function NewspaperSec() {
       );
     } catch {
       setImpact(null);
-      setReasons([{ sentiment: "Neutral", reason: "Error fetching news impact." }]);
+      setReasons([
+        {
+          sentiment: "Neutral",
+          reason: "Could not reach the news service. Is the backend running?",
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
