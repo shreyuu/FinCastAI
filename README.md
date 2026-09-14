@@ -8,13 +8,11 @@ A full-stack web application that provides comprehensive stock market analysis u
 - **Technical Analysis**: Multiple technical indicators including EMA, RSI, MACD, Bollinger Bands, and OBV
 - **Machine Learning Models**:
   - Support Vector Regression (SVR) for price prediction
-  - Support Vector Classification (SVC) for price direction
   - FinBERT for financial sentiment analysis from news articles
 - **News Sentiment Analysis**: Real-time news impact assessment on stock prices
 - **Interactive Dashboard**: Clean, responsive React frontend with real-time charts
-- **Portfolio Management**: Track your investments and P/L
-- **RESTful API**: FastAPI backend with comprehensive endpoints
-- **User Authentication**: Secure login and signup functionality
+- **RESTful API**: FastAPI backend with typed responses and real status codes
+- **User Authentication**: Signup and login with bcrypt-hashed passwords
 
 ## 🏗️ Project Structure
 
@@ -247,6 +245,10 @@ FinCastAI/
 - `GET /news-impact/{company}`: Analyze news sentiment impact
   - Returns impact percentage and news reasons
 
+All endpoints declare a response model and use real HTTP status codes:
+`404` unknown ticker, `422` date range too short to train, `502` upstream
+(Yahoo Finance / NewsData.io) failure. Errors carry a `detail` field.
+
 ### Authentication
 
 - `POST /users`: Create new user account
@@ -255,7 +257,8 @@ FinCastAI/
 
 - `POST /users/login`: User login
   - Body: `{ email, password }`
-  - Returns user data and session
+  - Returns `{ id, name, email }` on success
+  - `403 PASSWORD_RESET_REQUIRED` for accounts predating password hashing
 
 Visit `http://localhost:8000/docs` for interactive API documentation.
 
@@ -316,19 +319,16 @@ npm run lint
 
 ### Machine Learning Models
 
-- **SVR Model**: Support Vector Regression for price prediction using:
+- **SVR Model**: Support Vector Regression for price prediction using
+  historical OHLCV data and a news sentiment score.
 
-  - Historical OHLCV data
-  - Technical indicators
-  - News sentiment scores
-  - Hyperparameter tuning with GridSearchCV
+  `backend/app/svm.py` additionally contains an SVC direction classifier and
+  GridSearchCV tuning, but it is a standalone research script — nothing in the
+  API imports it.
 
-- **SVC Model**: Support Vector Classification for price direction
-
-- **FinBERT Sentiment**: Financial sentiment analysis with:
-  - Positive/Negative/Neutral classification
-  - Sentiment score scaling
-  - News impact estimation
+- **FinBERT Sentiment**: Positive/Negative/Neutral classification over recent
+  headlines, averaged into a signed score in [-1, 1] and reported as a
+  percentage impact via a single `IMPACT_SCALE`.
 
 ### Data Sources
 
@@ -339,12 +339,13 @@ npm run lint
 
 ### Stock Dashboard Features
 
-- Real-time price updates with percentage change
+- Real-time price updates with percentage change, batched and cached for 60s
 - Interactive price prediction charts with zoom levels (All Time, Year, Month, Week)
 - Historical vs. Predicted price visualization
-- Top movers display
-- Portfolio value tracking
 - News sentiment integration
+
+The Portfolio page currently renders clearly-labelled example data; there is no
+holdings store behind it yet.
 
 ## 🧪 Testing
 
@@ -426,6 +427,10 @@ This application is for educational and research purposes only. It should not be
 
 - [ ] Real-time WebSocket data streaming
 - [ ] More ML models (LSTM, Random Forest, XGBoost)
+- [ ] Portfolio tracking backed by a real holdings store
+- [ ] SVC direction classifier wired into the API
+- [ ] Rate limiting and session tokens on the auth server
+- [ ] Token-based password reset by email
 - [ ] Advanced portfolio analytics and recommendations
 - [ ] Mobile app development (React Native)
 - [ ] Advanced charting with candlestick patterns
