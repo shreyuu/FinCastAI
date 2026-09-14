@@ -1,94 +1,143 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import mysql from 'mysql2';
-import bcrypt from 'bcrypt';
-import { RowDataPacket } from 'mysql2';
-import db from './db/connection'; // <-- Use your shared connection
-// Initialize express app
-const app = express();
-const router = express.Router();
-const PORT = 3001;
+import express, { Request, Response } from "express";
+import cors from "cors";
+import bcrypt from "bcryptjs";
+import { OkPacket, RowDataPacket } from "mysql2";
+import db from "./db/connection";
 
-// Use CORS and JSON middleware
+const app = express();
+const PORT = Number(process.env.PORT) || 3001;
+const BCRYPT_ROUNDS = 10;
+
 app.use(cors());
 app.use(express.json());
 
-// Create user handler
-const createUserHandler = (req: Request, res: Response) => {
+/**
+ * Passwords were previously stored in plaintext. Migration 001 blanks every
+ * such value, so any stored password that is not a bcrypt hash belongs to an
+ * account that must set a new password before it can sign in again.
+ */
+function isBcryptHash(stored: unknown): stored is string {
+  return typeof stored === "string" && /^\$2[aby]\$\d{2}\$.{53}$/.test(stored);
+}
+
+app.post("/users", (req: Request, res: Response) => {
   const { name, email, password, dob, gender } = req.body;
 
   if (!name || !email || !password || !dob || !gender) {
-    res.status(400).json({ error: 'All fields are required.' });
+    res.status(400).json({ error: "All fields are required." });
     return;
   }
 
-  // Check if the user already exists
-  const checkQuery = 'SELECT * FROM users WHERE email = ?';
-  db.query(checkQuery, [email], (err, results) => {
-    if (err) {
-      console.error('Error checking user:', err);
-      res.status(500).json({ error: 'Server error.' });
-      return;
-    }
-
-    if (Array.isArray(results) && results.length > 0) {
-      // User already exists
-      res.status(409).json({ error: 'User already exists.' });
-      return;
-    }
-
-    // Insert new user into the database
-    const insertQuery = 'INSERT INTO users (name, email, password, dob, gender) VALUES (?, ?, ?, ?, ?)';
-    db.query(insertQuery, [name, email, password, dob, gender], (err, results) => {
+  db.query<RowDataPacket[]>(
+    "SELECT id FROM users WHERE email = ?",
+    [email],
+    (err, results) => {
       if (err) {
-        console.error('Error inserting user:', err);
-        res.status(500).json({ error: 'Server error.' });
+        console.error("Error checking user:", err);
+        res.status(500).json({ error: "Server error." });
         return;
       }
 
-      // The results here are an array of ResultSetHeader
-      const insertId = (results as mysql.OkPacket).insertId;
+      if (Array.isArray(results) && results.length > 0) {
+        res.status(409).json({ error: "User already exists." });
+        return;
+      }
 
-      res.status(201).json({
-        message: 'User created successfully',
-        user: { id: insertId, name, email, dob, gender },
+      bcrypt.hash(password, BCRYPT_ROUNDS, (hashErr, hashed) => {
+        if (hashErr) {
+          console.error("Error hashing password:", hashErr);
+          res.status(500).json({ error: "Server error." });
+          return;
+        }
+
+        db.query(
+          "INSERT INTO users (name, email, password, dob, gender) VALUES (?, ?, ?, ?, ?)",
+          [name, email, hashed, dob, gender],
+          (insertErr, insertResults) => {
+            if (insertErr) {
+              console.error("Error inserting user:", insertErr);
+              res.status(500).json({ error: "Server error." });
+              return;
+            }
+
+            res.status(201).json({
+              message: "User created successfully",
+              user: {
+                id: (insertResults as OkPacket).insertId,
+                name,
+                email,
+                dob,
+                gender,
+              },
+            });
+          }
+        );
       });
-    });
-  });
-};
+    }
+  );
+});
 
-// Register the route
-router.post('/users', createUserHandler);
-
-// Register router with the app
-app.use(router);
-app.post('/users/login', (req, res) => {
+app.post("/users/login", (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  const query = 'SELECT * FROM users WHERE email = ?';
-  db.query<RowDataPacket[]>(query, [email], (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error.' });
+  db.query<RowDataPacket[]>(
+    "SELECT * FROM users WHERE email = ?",
+    [email],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: "Database error." });
+        return;
+      }
+
+      if (results.length === 0) {
+        res.status(404).json({ error: "User not found." });
+        return;
+      }
+
+      const user = results[0];
+
+      if (!isBcryptHash(user.password)) {
+        // Account predates password hashing. Its old password was destroyed by
+        // migration 001 and cannot be used; an operator must set a new one.
+        res.status(403).json({
+          error:
+            "Your password must be reset before you can sign in. " +
+            "Please contact support to set a new password.",
+          code: "PASSWORD_RESET_REQUIRED",
+        });
+        return;
+      }
+
+      bcrypt.compare(password, user.password, (compareErr, matches) => {
+        if (compareErr) {
+          res.status(500).json({ error: "Database error." });
+          return;
+        }
+
+        if (!matches) {
+          res.status(401).json({ error: "Incorrect password." });
+          return;
+        }
+
+        // Return only what the client uses, rather than the whole row.
+        // `delete user.password` left dob and gender in the payload, which the
+        // client then persisted to localStorage for no reason.
+        res.status(200).json({
+          message: "Login successful",
+          user: { id: user.id, name: user.name, email: user.email },
+        });
+      });
     }
+  );
+});
 
-    if (results.length === 0) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
+// Export the app so tests can mount it without binding a port.
+export { app };
+export default app;
 
-    const user = results[0];
-
-    // Compare the plain text password directly without bcrypt
-    if (user.password !== password) {
-      return res.status(401).json({ error: 'Incorrect password.' });
-    }
-
-    // Optionally remove password before sending user info
-    delete user.password;
-
-    res.status(200).json({ message: 'Login successful', user });
+// Only listen when run directly (`ts-node src/server.ts`), not when imported.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
   });
-});
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+}

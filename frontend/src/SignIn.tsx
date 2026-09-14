@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import investmentImage from "./assets/photo/potosss.jpg";
+import { authUrl } from "./services/api";
 
 const SignInPage = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -20,7 +21,7 @@ const SignInPage = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3001/users/login", {
+      const response = await fetch(authUrl("/users/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -29,7 +30,10 @@ const SignInPage = () => {
       if (response.ok) {
         setLoginMessage("Login successful!");
         localStorage.setItem("user", JSON.stringify(data.user));
-        setTimeout(() => navigate("/dashboard"), 1200);
+        setTimeout(() => navigate("/dashBoard"), 1200);
+      } else if (data.code === "PASSWORD_RESET_REQUIRED") {
+        // Account predates password hashing; the old password no longer works.
+        setLoginMessage(data.error);
       } else {
         setLoginMessage(data.error || "Login failed.");
       }

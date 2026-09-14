@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import investmentImage from "./assets/photo/potosss.jpg";
+import { authUrl } from "./services/api";
 
 const SignupPage = () => {
   const [formData, setFormData] = useState({
@@ -36,7 +37,7 @@ const SignupPage = () => {
     const dob = `${formData.birthDate.year}-${formData.birthDate.month}-${formData.birthDate.day}`;
     const user = { ...formData, dob, email: formData.email.trim().toLowerCase() };
     try {
-      const response = await fetch("http://localhost:3001/users", {
+      const response = await fetch(authUrl("/users"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(user),

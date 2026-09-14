@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import Sidebar from "./components/Sidebar";
+import { backendUrl } from "./services/api";
 
 interface StockResponse {
   company: string;
@@ -16,7 +17,6 @@ interface StockResponse {
   };
   OBV: number;
   trade_decision: string;
-  error?: string;
 }
 
 function StockAnalyzer() {
@@ -28,25 +28,35 @@ function StockAnalyzer() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async () => {
+    if (!company.trim() || !ticker.trim()) {
+      setErrorMsg("Enter both a company name and a ticker.");
+      return;
+    }
     setLoading(true);
     setErrorMsg("");
     setResult(null);
     try {
-      const response = await axios.post<StockResponse>("http://localhost:8000/Indicotor", {
+      const response = await axios.post<StockResponse>(backendUrl("/Indicotor"), {
         company,
         ticker,
         owned_stock: ownedStock,
       });
-      if (response.data.error) {
-        setErrorMsg(response.data.error + " or check the stock name.");
-      } else {
-        setResult(response.data);
-      }
+      setResult(response.data);
     } catch (error) {
-      console.error("API request failed:", error);
-      setErrorMsg("Error fetching data. Please try again.");
+      // Non-2xx now throws; the backend puts the reason in `detail`.
+      if (axios.isAxiosError(error)) {
+        setErrorMsg(
+          error.response?.data?.detail ??
+            (error.response
+              ? `Request failed (${error.response.status}).`
+              : "Could not reach the prediction service. Is the backend running?")
+        );
+      } else {
+        setErrorMsg("Something went wrong. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -89,7 +99,13 @@ function StockAnalyzer() {
             disabled={loading}>
             {loading ? "Analyzing..." : "Predict Impact"}
           </button>
-          {errorMsg && <div className="mt-4 text-red-600 text-sm">{errorMsg}</div>}
+          {errorMsg && (
+            <div
+              role="alert"
+              className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorMsg}
+            </div>
+          )}
         </div>
 
         {result && (

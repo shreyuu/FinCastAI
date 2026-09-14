@@ -9,7 +9,10 @@ interface PortfolioStock {
   currentPrice: number;
 }
 
-const mockPortfolio: PortfolioStock[] = [
+// Sample data. There is no holdings store yet, so nothing here reflects a real
+// position. The UI labels it as an example -- do not remove that label without
+// wiring up real holdings first.
+const SAMPLE_PORTFOLIO: PortfolioStock[] = [
   { name: "Reliance Industries", ticker: "RELIANCE.NS", quantity: 10, avgPrice: 2500, currentPrice: 2650 },
   { name: "TCS", ticker: "TCS.NS", quantity: 5, avgPrice: 3200, currentPrice: 3300 },
   { name: "HDFC Bank", ticker: "HDFCBANK.NS", quantity: 8, avgPrice: 1500, currentPrice: 1480 },
@@ -19,8 +22,8 @@ function Portfolio() {
   const [portfolio, setPortfolio] = useState<PortfolioStock[]>([]);
 
   useEffect(() => {
-    // Replace with API call if backend is ready
-    setPortfolio(mockPortfolio);
+    // Replace with a real holdings endpoint when one exists.
+    setPortfolio(SAMPLE_PORTFOLIO);
   }, []);
 
   const totalInvestment = portfolio.reduce((sum, stock) => sum + stock.avgPrice * stock.quantity, 0);
@@ -32,7 +35,14 @@ function Portfolio() {
     <div className="text-black flex flex-row w-screen h-screen overflow-hidden bg-secondary">
       <Sidebar />
       <div className="h-screen w-5/6 flex flex-col overflow-y-scroll bg-secondary border-none p-8">
-        <h1 className="text-3xl font-bold mb-6 text-primary">My Portfolio</h1>
+        <h1 className="text-3xl font-bold mb-2 text-primary">My Portfolio</h1>
+        <div
+          role="note"
+          className="mb-6 max-w-3xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong className="font-semibold">Example data.</strong> These holdings are
+          illustrative only — the figures below are not real positions, prices or
+          profit and loss. Portfolio tracking is not built yet.
+        </div>
         <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-3xl mb-8">
           <div className="flex justify-between mb-6">
             <div>

@@ -8,13 +8,11 @@ A full-stack web application that provides comprehensive stock market analysis u
 - **Technical Analysis**: Multiple technical indicators including EMA, RSI, MACD, Bollinger Bands, and OBV
 - **Machine Learning Models**:
   - Support Vector Regression (SVR) for price prediction
-  - Support Vector Classification (SVC) for price direction
   - FinBERT for financial sentiment analysis from news articles
 - **News Sentiment Analysis**: Real-time news impact assessment on stock prices
 - **Interactive Dashboard**: Clean, responsive React frontend with real-time charts
-- **Portfolio Management**: Track your investments and P/L
-- **RESTful API**: FastAPI backend with comprehensive endpoints
-- **User Authentication**: Secure login and signup functionality
+- **RESTful API**: FastAPI backend with typed responses and real status codes
+- **User Authentication**: Signup and login with bcrypt-hashed passwords
 
 ## 🏗️ Project Structure
 
@@ -22,14 +20,10 @@ A full-stack web application that provides comprehensive stock market analysis u
 FinCastAI/
 ├── backend/                    # FastAPI backend application
 │   ├── app/
-│   │   ├── __init__.py        # FastAPI app initialization
-│   │   ├── main.py            # Main API endpoints
+│   │   ├── __init__.py        # Package marker
+│   │   ├── main.py            # All API endpoints, models and sentiment analysis
 │   │   ├── config.py          # Centralized configuration
-│   │   ├── models.py          # Pydantic models
-│   │   ├── indicators.py      # Technical indicators implementation
-│   │   ├── FinBert.py         # Financial sentiment analysis
-│   │   ├── svm.py             # SVM model implementation
-│   │   └── EQUITY_L.csv       # Stock symbols dataset
+│   │   └── svm.py             # SVR/SVC research script (not wired to the API)
 │   ├── requirements.txt       # Python dependencies
 │   └── .env                   # Environment variables
 ├── frontend/                   # React + TypeScript frontend
@@ -80,7 +74,6 @@ FinCastAI/
 - **TypeScript**: Type-safe JavaScript
 - **Vite**: Fast build tool and development server
 - **Tailwind CSS**: Utility-first CSS framework
-- **@mui/material**: Material UI component library
 - **lucide-react**: Icon library
 - **Recharts**: Charting library for data visualization
 - **Axios**: HTTP client for API requests
@@ -92,7 +85,6 @@ FinCastAI/
 - **TypeScript**: Type-safe backend
 - **MySQL**: User database
 - **bcryptjs**: Library for hashing passwords
-- **body-parser**: Node.js body parsing middleware
 - **cors**: Middleware for enabling Cross-Origin Resource Sharing
 - **dotenv**: Environment variable management
 
@@ -143,11 +135,10 @@ FinCastAI/
    DEBUG=True
    ```
 
-5. **Run the FastAPI server:**
+5. **Run the FastAPI server** (from `backend/`, so the `app` package resolves):
 
    ```bash
-   cd app
-   python main.py
+   uvicorn app.main:app --reload
    ```
 
    The API will be available at `http://localhost:8000`
@@ -170,7 +161,9 @@ FinCastAI/
 
 3. **Set up environment variables:**
 
-   Create a `.env` file in the `server` directory with your MySQL credentials:
+   Copy `server/.env.example` to `server/.env` and fill in your MySQL
+   credentials. All four `DB_*` values are required — the server refuses to
+   start without them.
 
    ```env
    DB_HOST=localhost
@@ -179,7 +172,20 @@ FinCastAI/
    DB_NAME=your_database_name
    ```
 
-4. **Run the authentication server:**
+4. **Apply the password migration** (first run only):
+
+   ```bash
+   mysql -u <user> -p <database> < migrations/001_force_password_reset.sql
+   ```
+
+   Passwords were previously stored in plaintext. This destroys those values,
+   so existing accounts must have a new password set before they can sign in:
+
+   ```bash
+   npm run set-password -- user@example.com
+   ```
+
+5. **Run the authentication server:**
 
    ```bash
    npm start
@@ -203,7 +209,7 @@ FinCastAI/
 
 3. **Set up environment variables:**
 
-   Create a `.env` file in the `frontend` directory:
+   Copy `frontend/.env.example` to `frontend/.env`:
 
    ```env
    VITE_API_URL=http://localhost:8000
@@ -239,6 +245,10 @@ FinCastAI/
 - `GET /news-impact/{company}`: Analyze news sentiment impact
   - Returns impact percentage and news reasons
 
+All endpoints declare a response model and use real HTTP status codes:
+`404` unknown ticker, `422` date range too short to train, `502` upstream
+(Yahoo Finance / NewsData.io) failure. Errors carry a `detail` field.
+
 ### Authentication
 
 - `POST /users`: Create new user account
@@ -247,7 +257,8 @@ FinCastAI/
 
 - `POST /users/login`: User login
   - Body: `{ email, password }`
-  - Returns user data and session
+  - Returns `{ id, name, email }` on success
+  - `403 PASSWORD_RESET_REQUIRED` for accounts predating password hashing
 
 Visit `http://localhost:8000/docs` for interactive API documentation.
 
@@ -256,11 +267,15 @@ Visit `http://localhost:8000/docs` for interactive API documentation.
 ### Backend
 
 ```bash
-# Run the FastAPI server
-python main.py
+# Run the FastAPI server (from backend/)
+uvicorn app.main:app --reload
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install test dependencies and run the suite (from backend/)
+pip install -r requirements-dev.txt
+pytest
 ```
 
 ### Server
@@ -271,6 +286,9 @@ npm start
 
 # Install dependencies
 npm install
+
+# Run the test suite
+npm test
 ```
 
 ### Frontend
@@ -301,19 +319,16 @@ npm run lint
 
 ### Machine Learning Models
 
-- **SVR Model**: Support Vector Regression for price prediction using:
+- **SVR Model**: Support Vector Regression for price prediction using
+  historical OHLCV data and a news sentiment score.
 
-  - Historical OHLCV data
-  - Technical indicators
-  - News sentiment scores
-  - Hyperparameter tuning with GridSearchCV
+  `backend/app/svm.py` additionally contains an SVC direction classifier and
+  GridSearchCV tuning, but it is a standalone research script — nothing in the
+  API imports it.
 
-- **SVC Model**: Support Vector Classification for price direction
-
-- **FinBERT Sentiment**: Financial sentiment analysis with:
-  - Positive/Negative/Neutral classification
-  - Sentiment score scaling
-  - News impact estimation
+- **FinBERT Sentiment**: Positive/Negative/Neutral classification over recent
+  headlines, averaged into a signed score in [-1, 1] and reported as a
+  percentage impact via a single `IMPACT_SCALE`.
 
 ### Data Sources
 
@@ -324,12 +339,32 @@ npm run lint
 
 ### Stock Dashboard Features
 
-- Real-time price updates with percentage change
+- Real-time price updates with percentage change, batched and cached for 60s
 - Interactive price prediction charts with zoom levels (All Time, Year, Month, Week)
 - Historical vs. Predicted price visualization
-- Top movers display
-- Portfolio value tracking
 - News sentiment integration
+
+The Portfolio page currently renders clearly-labelled example data; there is no
+holdings store behind it yet.
+
+## 🧪 Testing
+
+Both suites run offline with no database, no network, and no model download.
+
+```bash
+# Backend: 46 tests over the four served endpoints and the pure helpers
+cd backend && pip install -r requirements-dev.txt && pytest
+
+# Auth server: 16 tests over signup and login, with MySQL mocked
+cd server && npm install && npm test
+```
+
+The backend suite stubs `transformers.pipeline` before importing `main`, so it
+never loads FinBERT. Tests marked `CHARACTERISES <ID>` pin behaviour the audit
+flags as wrong (for example, failures returning HTTP 200). They are expected to
+fail when that behaviour is fixed — that failure is the signal the fix landed.
+
+There are no frontend tests yet.
 
 ## 🤝 Contributing
 
@@ -353,8 +388,8 @@ This application is for educational and research purposes only. It should not be
 
 1. **Port already in use**:
 
-   - Backend: Change `PORT` in `backend/app/config.py`
-   - Server: Change port in `server/src/server.ts`
+   - Backend: set `PORT` in `backend/.env`
+   - Server: set `PORT` in `server/.env`
    - Frontend: Change port in `vite.config.ts`
 
 2. **Python dependencies**:
@@ -392,6 +427,10 @@ This application is for educational and research purposes only. It should not be
 
 - [ ] Real-time WebSocket data streaming
 - [ ] More ML models (LSTM, Random Forest, XGBoost)
+- [ ] Portfolio tracking backed by a real holdings store
+- [ ] SVC direction classifier wired into the API
+- [ ] Rate limiting and session tokens on the auth server
+- [ ] Token-based password reset by email
 - [ ] Advanced portfolio analytics and recommendations
 - [ ] Mobile app development (React Native)
 - [ ] Advanced charting with candlestick patterns

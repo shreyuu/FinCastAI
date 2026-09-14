@@ -30,3 +30,14 @@ dataset/
 node_modules/
 build/
 .env
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test caches
+.pytest_cache/
+coverage/
+
+# Tooling
+.serena/
