@@ -19,23 +19,7 @@ function HomePage() {
   const [loadingStocks, setLoadingStocks] = useState(true);
 
   useEffect(() => {
-    // Fetch real-time stock prices from backend and perform a health check
-    fetch(backendUrl("/health"))
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Health check failed: ${res.status}`);
-        }
-        // try to parse JSON if any, otherwise continue
-        return res.json().catch(() => null);
-      })
-      .then((data) => {
-        console.log("backend health:", data);
-      })
-      .catch((err) => {
-        console.warn("Health check error:", err);
-      });
-
-    fetch("http://localhost:8000/stock-prices")
+    fetch(backendUrl("/stock-prices"))
       .then((response) => response.json())
       .then((data) => {
         setStockCards(data.stocks || []);
@@ -90,7 +74,6 @@ function HomePage() {
                 <div
                   key={stock.name}
                   className="relative w-64 h-24 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col justify-center items-start p-3">
-                  {/* Removed imageLogo */}
                   <span className="text-lg font-bold">{stock.name}</span>
                   <span
                     className={`text-sm font-semibold ${stock.color === "red" ? "text-red-500" : "text-green-500"}`}>

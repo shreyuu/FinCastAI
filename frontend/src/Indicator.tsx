@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import Sidebar from "./components/Sidebar";
+import { backendUrl } from "./services/api";
 
 interface StockResponse {
   company: string;
@@ -32,7 +33,7 @@ function StockAnalyzer() {
     setErrorMsg("");
     setResult(null);
     try {
-      const response = await axios.post<StockResponse>("http://localhost:8000/Indicotor", {
+      const response = await axios.post<StockResponse>(backendUrl("/Indicotor"), {
         company,
         ticker,
         owned_stock: ownedStock,
