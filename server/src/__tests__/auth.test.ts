@@ -1,15 +1,17 @@
 /**
  * Characterisation tests for the auth server.
  *
- * The MySQL connection is mocked, so these run with no database. They pin
- * current behaviour — including SEC-01, where passwords are stored and
- * compared in plaintext. The two tests marked CHARACTERISES SEC-01 are
- * expected to fail when phase 3 introduces bcrypt; that failure is the
- * signal that the fix landed, and they should be rewritten then.
+ * The MySQL connection is mocked, so these run with no database.
+ *
+ * SEC-01 is fixed as of phase 3: passwords are bcrypt-hashed on signup and
+ * compared with bcrypt.compare on login. Accounts that predate hashing were
+ * blanked by migration 001 and are rejected with 403 PASSWORD_RESET_REQUIRED
+ * until an operator sets a new password (npm run set-password).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import bcrypt from "bcryptjs";
 // vi.mock below is hoisted above this import, so `app` gets the fake db.
 import { app } from "../server";
 
@@ -103,21 +105,41 @@ describe("POST /users (signup)", () => {
     expect(res.body.error).toBe("Server error.");
   });
 
-  it("CHARACTERISES SEC-01: stores the password verbatim", async () => {
+  it("stores a bcrypt hash, never the submitted password", async () => {
     await request(app).post("/users").send(validUser);
 
     const insert = issued.find((q) => /^INSERT/i.test(q.sql))!;
-    expect(insert.params).toContain("correct-horse");
+    expect(insert.params).not.toContain(validUser.password);
+
+    const stored = insert.params[2] as string;
+    expect(stored).toMatch(/^\$2[aby]\$\d{2}\$/);
+    expect(await bcrypt.compare(validUser.password, stored)).toBe(true);
+  });
+
+  it("produces a different hash each time the same password is used", async () => {
+    await request(app).post("/users").send(validUser);
+    const first = issued.find((q) => /^INSERT/i.test(q.sql))!.params[2];
+
+    issued = [];
+    await request(app).post("/users").send(validUser);
+    const second = issued.find((q) => /^INSERT/i.test(q.sql))!.params[2];
+
+    expect(first).not.toBe(second); // bcrypt salts per call
   });
 });
 
 describe("POST /users/login", () => {
-  const storedUser = {
-    id: 42,
-    name: "Asha Rao",
-    email: "asha@example.com",
-    password: "correct-horse",
-  };
+  const PLAINTEXT = "correct-horse";
+  let storedUser: Record<string, unknown>;
+
+  beforeEach(async () => {
+    storedUser = {
+      id: 42,
+      name: "Asha Rao",
+      email: "asha@example.com",
+      password: await bcrypt.hash(PLAINTEXT, 10),
+    };
+  });
 
   it("rejects a wrong password with 401", async () => {
     selectRows = [{ ...storedUser }];
@@ -136,7 +158,7 @@ describe("POST /users/login", () => {
 
     const res = await request(app)
       .post("/users/login")
-      .send({ email: storedUser.email, password: "correct-horse" });
+      .send({ email: storedUser.email, password: PLAINTEXT });
 
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Login successful");
@@ -171,27 +193,58 @@ describe("POST /users/login", () => {
 
     await request(app)
       .post("/users/login")
-      .send({ email: storedUser.email, password: "correct-horse" });
+      .send({ email: storedUser.email, password: PLAINTEXT });
 
     expect(issued[0].sql).toMatch(/^SELECT .* FROM users WHERE email = \?/i);
     expect(issued[0].params).toEqual([storedUser.email]);
   });
 
-  it("CHARACTERISES SEC-01: compares the password as plaintext", async () => {
-    // A bcrypt hash of "correct-horse" must NOT authenticate today, because the
-    // comparison is a string equality check against the stored value. When
-    // phase 3 lands bcrypt, this expectation inverts.
+  it("never accepts a raw stored value as the password", async () => {
+    // Guards against a regression to string equality: if the stored hash were
+    // compared directly, sending it as the password would authenticate.
+    selectRows = [{ ...storedUser }];
+
+    const res = await request(app)
+      .post("/users/login")
+      .send({ email: storedUser.email, password: storedUser.password });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("forced password reset (SEC-01 migration)", () => {
+  const legacyEmail = "legacy@example.com";
+
+  it.each([
+    ["blanked by migration 001", ""],
+    ["still plaintext (migration not yet run)", "correct-horse"],
+    ["null", null],
+  ])("rejects an account whose password is %s", async (_label, stored) => {
+    selectRows = [{ id: 7, email: legacyEmail, password: stored }];
+
+    const res = await request(app)
+      .post("/users/login")
+      .send({ email: legacyEmail, password: "correct-horse" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("PASSWORD_RESET_REQUIRED");
+    expect(res.body).not.toHaveProperty("user");
+  });
+
+  it("lets the account sign in again once a bcrypt hash is set", async () => {
     selectRows = [
       {
-        ...storedUser,
-        password: "$2b$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOP",
+        id: 7,
+        email: legacyEmail,
+        password: await bcrypt.hash("brand-new-password", 10),
       },
     ];
 
     const res = await request(app)
       .post("/users/login")
-      .send({ email: storedUser.email, password: "correct-horse" });
+      .send({ email: legacyEmail, password: "brand-new-password" });
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe("Login successful");
   });
 });
