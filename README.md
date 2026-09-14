@@ -256,6 +256,10 @@ python main.py
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install test dependencies and run the suite (from backend/)
+pip install -r requirements-dev.txt
+pytest
 ```
 
 ### Server
@@ -266,6 +270,9 @@ npm start
 
 # Install dependencies
 npm install
+
+# Run the test suite
+npm test
 ```
 
 ### Frontend
@@ -325,6 +332,25 @@ npm run lint
 - Top movers display
 - Portfolio value tracking
 - News sentiment integration
+
+## 🧪 Testing
+
+Both suites run offline with no database, no network, and no model download.
+
+```bash
+# Backend: 46 tests over the four served endpoints and the pure helpers
+cd backend && pip install -r requirements-dev.txt && pytest
+
+# Auth server: 16 tests over signup and login, with MySQL mocked
+cd server && npm install && npm test
+```
+
+The backend suite stubs `transformers.pipeline` before importing `main`, so it
+never loads FinBERT. Tests marked `CHARACTERISES <ID>` pin behaviour the audit
+flags as wrong (for example, failures returning HTTP 200). They are expected to
+fail when that behaviour is fixed — that failure is the signal the fix landed.
+
+There are no frontend tests yet.
 
 ## 🤝 Contributing
 
