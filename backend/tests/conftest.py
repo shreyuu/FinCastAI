@@ -12,8 +12,11 @@ from pathlib import Path
 
 import pytest
 
-APP_DIR = Path(__file__).resolve().parent.parent / "app"
-sys.path.insert(0, str(APP_DIR))
+# `main` uses a relative import (`from .config import Config`), so it must be
+# imported as `app.main` with backend/ on the path -- the same way
+# `uvicorn app.main:app` loads it.
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_DIR))
 
 
 class StubPipeline:
@@ -41,7 +44,7 @@ def _install_transformers_stub():
 
 _install_transformers_stub()
 
-import main as main_module  # noqa: E402  (must follow the stub above)
+from app import main as main_module  # noqa: E402  (must follow the stub above)
 
 
 @pytest.fixture

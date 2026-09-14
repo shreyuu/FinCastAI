@@ -15,12 +15,11 @@ from pandas.tseries.offsets import BDay
 from typing import List, Dict, Optional  # ensure Optional is available
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import ta
-import asyncio
 
 # ============================================================
 # Configuration Import
 # ============================================================
-from config import Config
+from .config import Config
 
 # Initialize FinBERT Sentiment Analysis Pipeline
 sentiment_pipeline = pipeline("text-classification", model=Config.FINBERT_MODEL)
@@ -131,8 +130,16 @@ def _signed_sentiment_scores(news_list: List[str]) -> List[float]:
     return scores
 
 
-def analyze_sentiment1(news_list: List[str]) -> float:
-    """Lightweight sentiment scoring (mean signed FinBERT score)."""
+# A sentiment score is the mean signed FinBERT confidence over the batch, in
+# [-1, 1]. The /news-impact endpoint reports it as a percentage via
+# IMPACT_SCALE; /predict and /Indicotor use the raw value. Keeping one
+# definition and one scale factor here avoids the three divergent scalings this
+# module used to carry.
+IMPACT_SCALE = 20.0
+
+
+def analyze_sentiment(news_list: List[str]) -> float:
+    """Mean signed FinBERT score for a batch of articles, in [-1, 1]."""
     if not news_list:
         return 0.0
     try:
@@ -143,17 +150,9 @@ def analyze_sentiment1(news_list: List[str]) -> float:
         return 0.0
 
 
-def analyze_sentiment(news_list: List[str]) -> float:
-    """Detailed sentiment analysis, scaled for the news-impact endpoint."""
-    if not news_list:
-        return 0.0
-    try:
-        scores = _signed_sentiment_scores(news_list)
-        avg_sentiment = float(np.mean(scores)) * 10 if scores else 0.0
-        return round(avg_sentiment * 2, 2)
-    except Exception as e:
-        print(f"Error analyzing sentiment: {str(e)}")
-        return 0.0
+def sentiment_impact(news_list: List[str]) -> float:
+    """Sentiment expressed as a percentage impact, rounded for display."""
+    return round(analyze_sentiment(news_list) * IMPACT_SCALE, 2)
 
 
 # ============================================================
@@ -189,13 +188,12 @@ async def predict_stock(data: StockRequest):
     """
     try:
         stock_data = yf.download(data.ticker, start=data.start_date, end=data.end_date)
-        await asyncio.sleep(1)
 
         if stock_data.empty:
             return {"error": "Stock data not available"}
 
         company_name = data.ticker.split(".")[0]
-        sentiment_score = analyze_sentiment1(fetch_news(company_name))
+        sentiment_score = analyze_sentiment(fetch_news(company_name))
         sentiment_score = float(sentiment_score)
 
         historical_prices = []
@@ -366,24 +364,22 @@ async def news_impact(company: str):
                 "reasons": ["No relevant news found."],
             }
 
-        # Run the (slow) FinBERT pipeline once per article and reuse the results.
+        # Run the (slow) FinBERT pipeline once for the whole batch.
         results = sentiment_pipeline(news_list)
 
         label_to_text = {"positive": "[Positive]", "negative": "[Negative]"}
-        scores = []
-        reasons = []
-        for news, result in zip(news_list, results):
-            label = result["label"]
-            score = result["score"]
-            if label == "positive":
-                scores.append(score * 10)
-            elif label == "negative":
-                scores.append(-score * 10)
-            else:
-                scores.append(0.0)
-            reasons.append(f"{label_to_text.get(label, '[Neutral]')} {news[:150]}...")
+        reasons = [
+            f"{label_to_text.get(r['label'], '[Neutral]')} {news[:150]}..."
+            for news, r in zip(news_list, results)
+        ]
 
-        impact = round(float(np.mean(scores)) * 2, 2) if scores else 0.0
+        signed = [
+            r["score"] if r["label"] == "positive"
+            else -r["score"] if r["label"] == "negative"
+            else 0.0
+            for r in results
+        ]
+        impact = round(float(np.mean(signed)) * IMPACT_SCALE, 2) if signed else 0.0
         return {"company": company, "impact": float(impact), "reasons": reasons}
     except Exception as e:
         return {"error": f"Failed to analyze news impact: {str(e)}"}
@@ -395,7 +391,7 @@ async def news_impact(company: str):
 @app.post("/Indicotor")
 def predict_stock_impact(stock_request: StockRequest2):
     news_list = fetch_news(stock_request.company)
-    sentiment_score = analyze_sentiment1(news_list)
+    sentiment_score = analyze_sentiment(news_list)
     stock_data = fetch_stock_indicators(stock_request.ticker)
 
     if stock_data is None:

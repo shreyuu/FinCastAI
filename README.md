@@ -87,7 +87,6 @@ FinCastAI/
 - **TypeScript**: Type-safe backend
 - **MySQL**: User database
 - **bcryptjs**: Library for hashing passwords
-- **body-parser**: Node.js body parsing middleware
 - **cors**: Middleware for enabling Cross-Origin Resource Sharing
 - **dotenv**: Environment variable management
 
@@ -138,11 +137,10 @@ FinCastAI/
    DEBUG=True
    ```
 
-5. **Run the FastAPI server:**
+5. **Run the FastAPI server** (from `backend/`, so the `app` package resolves):
 
    ```bash
-   cd app
-   python main.py
+   uvicorn app.main:app --reload
    ```
 
    The API will be available at `http://localhost:8000`
@@ -165,7 +163,9 @@ FinCastAI/
 
 3. **Set up environment variables:**
 
-   Create a `.env` file in the `server` directory with your MySQL credentials:
+   Copy `server/.env.example` to `server/.env` and fill in your MySQL
+   credentials. All four `DB_*` values are required — the server refuses to
+   start without them.
 
    ```env
    DB_HOST=localhost
@@ -174,7 +174,20 @@ FinCastAI/
    DB_NAME=your_database_name
    ```
 
-4. **Run the authentication server:**
+4. **Apply the password migration** (first run only):
+
+   ```bash
+   mysql -u <user> -p <database> < migrations/001_force_password_reset.sql
+   ```
+
+   Passwords were previously stored in plaintext. This destroys those values,
+   so existing accounts must have a new password set before they can sign in:
+
+   ```bash
+   npm run set-password -- user@example.com
+   ```
+
+5. **Run the authentication server:**
 
    ```bash
    npm start
@@ -198,7 +211,7 @@ FinCastAI/
 
 3. **Set up environment variables:**
 
-   Create a `.env` file in the `frontend` directory:
+   Copy `frontend/.env.example` to `frontend/.env`:
 
    ```env
    VITE_API_URL=http://localhost:8000
@@ -251,8 +264,8 @@ Visit `http://localhost:8000/docs` for interactive API documentation.
 ### Backend
 
 ```bash
-# Run the FastAPI server
-python main.py
+# Run the FastAPI server (from backend/)
+uvicorn app.main:app --reload
 
 # Install dependencies
 pip install -r requirements.txt
@@ -374,8 +387,8 @@ This application is for educational and research purposes only. It should not be
 
 1. **Port already in use**:
 
-   - Backend: Change `PORT` in `backend/app/config.py`
-   - Server: Change port in `server/src/server.ts`
+   - Backend: set `PORT` in `backend/.env`
+   - Server: set `PORT` in `server/.env`
    - Frontend: Change port in `vite.config.ts`
 
 2. **Python dependencies**:

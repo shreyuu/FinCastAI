@@ -63,17 +63,17 @@ def test_signed_scores_map_labels_to_signs(main, labelled_pipeline):
     assert main._signed_sentiment_scores(["a", "b", "c"]) == [0.8, -0.4, 0.0]
 
 
-def test_analyze_sentiment1_averages_signed_scores(main, labelled_pipeline):
+def test_analyze_sentiment_averages_signed_scores(main, labelled_pipeline):
     main.sentiment_pipeline = labelled_pipeline([("positive", 0.6), ("negative", 0.2)])
 
-    assert main.analyze_sentiment1(["a", "b"]) == pytest.approx(0.2)
+    assert main.analyze_sentiment(["a", "b"]) == pytest.approx(0.2)
 
 
-def test_analyze_sentiment1_returns_zero_for_no_news(main):
-    assert main.analyze_sentiment1([]) == 0.0
+def test_analyze_sentiment_returns_zero_for_no_news(main):
+    assert main.analyze_sentiment([]) == 0.0
 
 
-def test_analyze_sentiment1_swallows_pipeline_errors(main):
+def test_analyze_sentiment_swallows_pipeline_errors(main):
     """CHARACTERISES ERR-01: a model failure is reported as neutral sentiment."""
 
     def boom(_inputs, *a, **kw):
@@ -81,21 +81,28 @@ def test_analyze_sentiment1_swallows_pipeline_errors(main):
 
     main.sentiment_pipeline = boom
 
-    assert main.analyze_sentiment1(["a"]) == 0.0
+    assert main.analyze_sentiment(["a"]) == 0.0
 
 
-def test_analyze_sentiment_applies_the_scaled_variant(main, labelled_pipeline):
-    """CHARACTERISES DUP-01: main.py holds two scalings of the same quantity.
+def test_sentiment_impact_is_the_raw_score_times_the_scale(main, labelled_pipeline):
+    """DUP-01 is resolved: one score, one documented scale factor.
 
-    `analyze_sentiment` is x10 then x2 relative to `analyze_sentiment1`, and has
-    no callers. Phase 3 deletes it; this records what it did first.
+    The three divergent scalings main.py used to carry are now a single
+    IMPACT_SCALE applied on top of analyze_sentiment.
     """
     main.sentiment_pipeline = labelled_pipeline([("positive", 0.5)])
-
-    assert main.analyze_sentiment1(["a"]) == pytest.approx(0.5)
+    assert main.analyze_sentiment(["a"]) == pytest.approx(0.5)
 
     main.sentiment_pipeline = labelled_pipeline([("positive", 0.5)])
-    assert main.analyze_sentiment(["a"]) == pytest.approx(10.0)
+    assert main.sentiment_impact(["a"]) == pytest.approx(0.5 * main.IMPACT_SCALE)
+
+
+def test_impact_scale_preserves_the_previous_news_impact_values(main, labelled_pipeline):
+    """The old inline scaling was mean(score*10) * 2, i.e. x20. Keep that."""
+    assert main.IMPACT_SCALE == 20.0
+
+    main.sentiment_pipeline = labelled_pipeline([("positive", 0.9)])
+    assert main.sentiment_impact(["a"]) == pytest.approx(18.0)
 
 
 # ------------------------------------------------------------- fetch_news
