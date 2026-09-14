@@ -119,8 +119,13 @@ app.post("/users/login", (req: Request, res: Response) => {
           return;
         }
 
-        delete user.password;
-        res.status(200).json({ message: "Login successful", user });
+        // Return only what the client uses, rather than the whole row.
+        // `delete user.password` left dob and gender in the payload, which the
+        // client then persisted to localStorage for no reason.
+        res.status(200).json({
+          message: "Login successful",
+          user: { id: user.id, name: user.name, email: user.email },
+        });
       });
     }
   );

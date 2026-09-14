@@ -162,8 +162,23 @@ describe("POST /users/login", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Login successful");
-    expect(res.body.user.email).toBe(storedUser.email);
-    expect(res.body.user).not.toHaveProperty("password");
+    expect(res.body.user).toEqual({
+      id: storedUser.id,
+      name: storedUser.name,
+      email: storedUser.email,
+    });
+  });
+
+  it("does not leak dob, gender or the hash in the login response", async () => {
+    selectRows = [{ ...storedUser, dob: "1995-04-12", gender: "Female" }];
+
+    const res = await request(app)
+      .post("/users/login")
+      .send({ email: storedUser.email, password: PLAINTEXT });
+
+    for (const field of ["password", "dob", "gender"]) {
+      expect(res.body.user).not.toHaveProperty(field);
+    }
   });
 
   it("returns 404 for an unknown email", async () => {
