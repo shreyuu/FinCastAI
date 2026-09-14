@@ -48,6 +48,22 @@ class FakeTicker:
         return self._frame
 
 
+def multi_ohlcv(closes_by_ticker, days=5):
+    """A batched, MultiIndex-column download like yf.download(multiple tickers).
+
+    `closes_by_ticker` maps ticker -> list of closing prices (oldest first).
+    """
+    idx = pd.bdate_range(start="2025-06-02", periods=days)
+    frames = {}
+    for ticker, closes in closes_by_ticker.items():
+        padded = ([float("nan")] * (days - len(closes))) + list(closes)
+        for field in ("Open", "High", "Low", "Close", "Volume"):
+            frames[(ticker, field)] = padded
+    df = pd.DataFrame(frames, index=idx)
+    df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
+
+
 class FakeYFinance:
     """Stands in for the `yf` module as `main.py` uses it."""
 

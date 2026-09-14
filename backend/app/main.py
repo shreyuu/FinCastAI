@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import yfinance as yf
 import numpy as np
@@ -15,6 +15,8 @@ from pandas.tseries.offsets import BDay
 from typing import List, Dict, Optional  # ensure Optional is available
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import ta
+import time
+import threading
 
 # ============================================================
 # Configuration Import
@@ -52,6 +54,7 @@ class StockRequest(BaseModel):
 
 
 class NewsResponse(BaseModel):
+    company: str
     impact: float
     reasons: List[str]
 
@@ -59,10 +62,50 @@ class NewsResponse(BaseModel):
 class StockPrice(BaseModel):
     name: str
     price: float
+    color: str
+    percent_change: float
 
 
 class StockPricesResponse(BaseModel):
     stocks: List[StockPrice]
+
+
+class BollingerBands(BaseModel):
+    Low: float
+    Mid: float
+    Up: float
+
+
+class IndicatorResponse(BaseModel):
+    company: str
+    ticker: str
+    impact: float
+    RSI: float
+    EMA: float
+    MACD: float
+    Bollinger_Bands: BollingerBands
+    OBV: float
+    trade_decision: str
+
+
+class PricePoint(BaseModel):
+    date: str
+    price: float
+    type: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class PredictionResponse(BaseModel):
+    name: str
+    data: List[PricePoint]
+    Hdata: List[PricePoint]
+    curprice: float
+    sentiment_score: float
+    adjustment_factor: float
+    stock_prices: List[StockPrice]
 
 
 # ============================================================
@@ -181,7 +224,7 @@ def fetch_stock_indicators(ticker):
 # ============================================================
 # Stock Prediction Endpoint
 # ============================================================
-@app.post("/predict")
+@app.post("/predict", response_model=PredictionResponse)
 async def predict_stock(data: StockRequest):
     """
     Predict stock prices using historical data, sentiment analysis, and SVR
@@ -190,7 +233,10 @@ async def predict_stock(data: StockRequest):
         stock_data = yf.download(data.ticker, start=data.start_date, end=data.end_date)
 
         if stock_data.empty:
-            return {"error": "Stock data not available"}
+            raise HTTPException(
+                status_code=404,
+                detail=f"No market data for ticker {data.ticker!r}. Check the symbol.",
+            )
 
         company_name = data.ticker.split(".")[0]
         sentiment_score = analyze_sentiment(fetch_news(company_name))
@@ -219,7 +265,13 @@ async def predict_stock(data: StockRequest):
         # Train only on rows that have a real (known) future target.
         train_data = stock_data.dropna(subset=feature_cols + ["Target"])
         if train_data.empty:
-            return {"error": "Not enough data to train the model"}
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Not enough history to train: {len(stock_data)} rows for a "
+                    f"{data.forecast_out}-day forecast. Widen the date range."
+                ),
+            )
 
         X = train_data[feature_cols].values
         y = train_data["Target"].values
@@ -277,28 +329,16 @@ async def predict_stock(data: StockRequest):
         )
         print("==================================\n")
 
-        stock = yf.Ticker(data.ticker)
-        hist = stock.history(period="2d")
-
-        stock_prices = []
-        if len(hist) >= 2:
-            yesterday_close = float(hist["Close"].iloc[-2])
-            current_close = float(hist["Close"].iloc[-1])
-            color = "green" if current_close > yesterday_close else "red"
-            percent_change = ((current_close - yesterday_close) / yesterday_close) * 100
-        else:
-            current_close = float(hist["Close"].iloc[-1])
-            color = "grey"
-            percent_change = 0.0
-
-        stock_prices.append(
-            {
-                "name": data.ticker,
-                "price": current_close,
-                "color": color,
-                "percent_change": round(percent_change, 2),
-            }
-        )
+        # The last two rows of the frame we already downloaded carry the same
+        # information the old second yf.Ticker(...).history("2d") call fetched.
+        #
+        # Caveat: if end_date is in the past this is the close on that date, not
+        # today's price. The GET wrapper defaults end_date to today, so the
+        # normal path is unaffected; a caller asking for a historical window
+        # gets the last close in that window, which is the honest answer.
+        quote = _quote_from_closes(_closes_for(stock_data, data.ticker))
+        current_close = quote["price"]
+        stock_prices = [{"name": data.ticker, **quote}]
 
         return {
             "name": data.ticker,
@@ -310,50 +350,108 @@ async def predict_stock(data: StockRequest):
             "stock_prices": stock_prices,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
 
         print(traceback.format_exc())
-        return {"error": f"Prediction failed: {str(e)}"}
+        raise HTTPException(status_code=502, detail=f"Prediction failed: {e}")
 
 
 # ============================================================
 # Stock Prices Endpoint
 # ============================================================
-@app.get("/stock-prices")
+QUOTE_CACHE_TTL_SECONDS = 60
+_quote_cache: Dict[str, object] = {"key": None, "at": 0.0, "value": None}
+_quote_cache_lock = threading.Lock()
+
+
+def _quote_from_closes(closes: pd.Series) -> Dict[str, object]:
+    """Latest price, direction and percent change from a Close series."""
+    closes = closes.dropna()
+    if len(closes) >= 2:
+        previous = float(closes.iloc[-2])
+        latest = float(closes.iloc[-1])
+        if previous == 0:
+            return {"price": latest, "color": "grey", "percent_change": 0.0}
+        change = ((latest - previous) / previous) * 100
+        return {
+            "price": latest,
+            "color": "green" if latest > previous else "red",
+            "percent_change": round(change, 2),
+        }
+    if len(closes) == 1:
+        return {"price": float(closes.iloc[-1]), "color": "grey", "percent_change": 0.0}
+    return {"price": 0.0, "color": "grey", "percent_change": 0.0}
+
+
+def _closes_for(frame: pd.DataFrame, ticker: str) -> pd.Series:
+    """Pull one ticker's Close column out of a batched yfinance download.
+
+    A multi-ticker download returns MultiIndex columns; a single-ticker one may
+    return either shape depending on the yfinance version, so handle both.
+    """
+    if frame is None or frame.empty:
+        return pd.Series(dtype=float)
+    if isinstance(frame.columns, pd.MultiIndex):
+        for key in ((ticker, "Close"), ("Close", ticker)):
+            if key in frame.columns:
+                return frame[key]
+        return pd.Series(dtype=float)
+    return frame["Close"] if "Close" in frame.columns else pd.Series(dtype=float)
+
+
+def _fetch_quotes(tickers: Dict[str, str]) -> List[Dict[str, object]]:
+    """One batched download for every ticker, cached briefly.
+
+    Previously this issued one blocking yf.Ticker().history() per symbol -
+    fifteen sequential round trips on every landing-page load.
+    """
+    key = ",".join(sorted(tickers.values()))
+    now = time.time()
+
+    with _quote_cache_lock:
+        if (
+            _quote_cache["key"] == key
+            and now - float(_quote_cache["at"]) < QUOTE_CACHE_TTL_SECONDS
+            and _quote_cache["value"] is not None
+        ):
+            return list(_quote_cache["value"])  # type: ignore[arg-type]
+
+    frame = yf.download(
+        " ".join(tickers.values()),
+        period="5d",
+        interval="1d",
+        group_by="ticker",
+        progress=False,
+        auto_adjust=True,
+    )
+
+    quotes = [
+        {"name": name, **_quote_from_closes(_closes_for(frame, ticker))}
+        for name, ticker in tickers.items()
+    ]
+
+    with _quote_cache_lock:
+        _quote_cache.update({"key": key, "at": now, "value": list(quotes)})
+    return quotes
+
+
+@app.get("/stock-prices", response_model=StockPricesResponse)
 async def get_stock_prices():
-    stock_tickers = Config.STOCK_TICKERS
     try:
-        stock_prices = []
-        for stock_name, ticker in stock_tickers.items():
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="2d")
-            if len(hist) >= 2:
-                yesterday_close = float(hist["Close"].iloc[-2])
-                current_close = float(hist["Close"].iloc[-1])
-                color = "green" if current_close > yesterday_close else "red"
-                percent_change = (
-                    (current_close - yesterday_close) / yesterday_close
-                ) * 100
-            else:
-                current_close, color, percent_change = 0.0, "grey", 0.0
-            stock_prices.append(
-                {
-                    "name": stock_name,
-                    "price": current_close,
-                    "color": color,
-                    "percent_change": round(percent_change, 2),
-                }
-            )
-        return {"stocks": stock_prices}
+        return {"stocks": _fetch_quotes(Config.STOCK_TICKERS)}
     except Exception as e:
-        return {"error": f"Failed to fetch stock prices: {str(e)}"}
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch stock prices: {e}"
+        )
 
 
 # ============================================================
 # News Sentiment Endpoint
 # ============================================================
-@app.get("/news-impact/{company}")
+@app.get("/news-impact/{company}", response_model=NewsResponse)
 async def news_impact(company: str):
     try:
         news_list = fetch_news(company)
@@ -381,21 +479,31 @@ async def news_impact(company: str):
         ]
         impact = round(float(np.mean(signed)) * IMPACT_SCALE, 2) if signed else 0.0
         return {"company": company, "impact": float(impact), "reasons": reasons}
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"error": f"Failed to analyze news impact: {str(e)}"}
+        raise HTTPException(
+            status_code=502, detail=f"Failed to analyze news impact: {e}"
+        )
 
 
 # ============================================================
 # Indicator & Trade Decision Endpoint
 # ============================================================
-@app.post("/Indicotor")
+@app.post("/Indicotor", response_model=IndicatorResponse)
 def predict_stock_impact(stock_request: StockRequest2):
     news_list = fetch_news(stock_request.company)
     sentiment_score = analyze_sentiment(news_list)
     stock_data = fetch_stock_indicators(stock_request.ticker)
 
     if stock_data is None:
-        return {"error": "Stock data not available"}
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No market data for ticker {stock_request.ticker!r}. "
+                "Check the symbol."
+            ),
+        )
 
     impact = sentiment_score * 10
     trade_signal = "No Action"
@@ -426,14 +534,14 @@ def predict_stock_impact(stock_request: StockRequest2):
 # ============================================================
 # Add simple health endpoint for frontend /health checks
 # ============================================================
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health():
     return {"status": "ok"}
 
 
 # Provide a lightweight GET wrapper so frontend code using GET /predict_stock can still work.
 # This constructs the expected request model and delegates to the existing POST handler.
-@app.get("/predict_stock")
+@app.get("/predict_stock", response_model=PredictionResponse)
 async def predict_stock_get(
     ticker: str,
     start_date: str = "2020-01-01",

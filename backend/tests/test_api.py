@@ -1,15 +1,14 @@
 """Characterisation tests for the four served endpoints plus /health.
 
-These pin *current* behaviour, including the parts the audit flags as wrong
-(ERR-01: failures return HTTP 200 with an "error" key). When phase 4 changes
-that contract, these tests should fail loudly — that is the point. Each such
-test is marked with a CHARACTERISES comment naming the finding.
+As of phase 4 these assert the intended contract: real HTTP status codes
+(404 unknown ticker, 422 untrainable range, 502 upstream failure), declared
+response models, and a single batched market-data call per request.
 """
 
 import pandas as pd
 import pytest
 
-from market_fixtures import FakeYFinance, history_2d, ohlcv
+from market_fixtures import FakeYFinance, multi_ohlcv, ohlcv
 
 
 # ---------------------------------------------------------------- /health
@@ -26,7 +25,9 @@ def test_health_returns_ok(client):
 
 def test_stock_prices_reports_price_change_and_colour(client, main, monkeypatch):
     monkeypatch.setattr(
-        main, "yf", FakeYFinance(history_frame=history_2d(prev_close=100.0, last_close=110.0))
+        main,
+        "yf",
+        FakeYFinance(download_frame=multi_ohlcv({"RELIANCE.NS": [100.0, 110.0]})),
     )
     monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"Reliance": "RELIANCE.NS"})
 
@@ -39,7 +40,7 @@ def test_stock_prices_reports_price_change_and_colour(client, main, monkeypatch)
 
 def test_stock_prices_marks_a_fall_red(client, main, monkeypatch):
     monkeypatch.setattr(
-        main, "yf", FakeYFinance(history_frame=history_2d(prev_close=100.0, last_close=95.0))
+        main, "yf", FakeYFinance(download_frame=multi_ohlcv({"TCS.NS": [100.0, 95.0]}))
     )
     monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"TCS": "TCS.NS"})
 
@@ -52,48 +53,105 @@ def test_stock_prices_marks_a_fall_red(client, main, monkeypatch):
 def test_stock_prices_falls_back_to_grey_with_insufficient_history(
     client, main, monkeypatch
 ):
-    one_day = pd.DataFrame({"Close": [100.0]}, index=pd.bdate_range("2025-06-02", periods=1))
-    monkeypatch.setattr(main, "yf", FakeYFinance(history_frame=one_day))
+    monkeypatch.setattr(
+        main, "yf", FakeYFinance(download_frame=multi_ohlcv({"THIN.NS": [100.0]}))
+    )
     monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"Thin": "THIN.NS"})
 
     stock = client.get("/stock-prices").json()["stocks"][0]
 
-    assert stock == {"name": "Thin", "price": 0.0, "color": "grey", "percent_change": 0.0}
+    assert stock == {
+        "name": "Thin",
+        "price": 100.0,
+        "color": "grey",
+        "percent_change": 0.0,
+    }
 
 
-def test_stock_prices_issues_one_request_per_ticker(client, main, monkeypatch):
-    """CHARACTERISES PERF-01: 15 configured tickers means 15 sequential calls.
+def test_stock_prices_reports_zero_for_a_ticker_with_no_data(client, main, monkeypatch):
+    monkeypatch.setattr(
+        main, "yf", FakeYFinance(download_frame=multi_ohlcv({"REAL.NS": [100.0, 101.0]}))
+    )
+    monkeypatch.setattr(
+        main.Config, "STOCK_TICKERS", {"Real": "REAL.NS", "Missing": "GONE.NS"}
+    )
 
-    When phase 4 batches the download this test should fail; replace it with an
-    assertion that exactly one batched call is made.
-    """
-    fake = FakeYFinance(history_frame=history_2d())
+    stocks = {s["name"]: s for s in client.get("/stock-prices").json()["stocks"]}
+
+    assert stocks["Missing"] == {
+        "name": "Missing",
+        "price": 0.0,
+        "color": "grey",
+        "percent_change": 0.0,
+    }
+    assert stocks["Real"]["price"] == 101.0
+
+
+def test_stock_prices_makes_one_batched_call_for_every_ticker(client, main, monkeypatch):
+    """PERF-01 fixed: one download for all tickers, not one call each."""
+    fake = FakeYFinance(
+        download_frame=multi_ohlcv(
+            {"A.NS": [1.0, 2.0], "B.NS": [3.0, 4.0], "C.NS": [5.0, 6.0]}
+        )
+    )
     monkeypatch.setattr(main, "yf", fake)
     monkeypatch.setattr(
         main.Config, "STOCK_TICKERS", {"A": "A.NS", "B": "B.NS", "C": "C.NS"}
     )
+    main._quote_cache.update({"key": None, "at": 0.0, "value": None})
 
     client.get("/stock-prices")
 
-    assert fake.ticker_calls == ["A.NS", "B.NS", "C.NS"]
+    assert fake.ticker_calls == [], "should not fall back to per-ticker yf.Ticker"
+    assert len(fake.download_calls) == 1
+    requested = fake.download_calls[0][0].split()
+    assert sorted(requested) == ["A.NS", "B.NS", "C.NS"]
 
 
-def test_stock_prices_returns_200_with_error_key_on_upstream_failure(
-    client, main, monkeypatch
-):
-    """CHARACTERISES ERR-01: upstream failure is reported as HTTP 200."""
+def test_stock_prices_serves_a_repeat_request_from_cache(client, main, monkeypatch):
+    fake = FakeYFinance(download_frame=multi_ohlcv({"A.NS": [1.0, 2.0]}))
+    monkeypatch.setattr(main, "yf", fake)
+    monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"A": "A.NS"})
+    main._quote_cache.update({"key": None, "at": 0.0, "value": None})
+
+    first = client.get("/stock-prices").json()
+    second = client.get("/stock-prices").json()
+
+    assert first == second
+    assert len(fake.download_calls) == 1, "second request should hit the cache"
+
+
+def test_stock_prices_refetches_once_the_cache_expires(client, main, monkeypatch):
+    fake = FakeYFinance(download_frame=multi_ohlcv({"A.NS": [1.0, 2.0]}))
+    monkeypatch.setattr(main, "yf", fake)
+    monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"A": "A.NS"})
+    main._quote_cache.update({"key": None, "at": 0.0, "value": None})
+
+    client.get("/stock-prices")
+    # pretend the cached entry is older than its TTL
+    main._quote_cache["at"] = main._quote_cache["at"] - (
+        main.QUOTE_CACHE_TTL_SECONDS + 1
+    )
+    client.get("/stock-prices")
+
+    assert len(fake.download_calls) == 2
+
+
+def test_stock_prices_returns_502_when_the_upstream_fails(client, main, monkeypatch):
+    """ERR-01 fixed: upstream failure is a real status code, not a 200."""
 
     class Exploding(FakeYFinance):
-        def Ticker(self, ticker):
+        def download(self, *a, **kw):
             raise RuntimeError("yfinance is down")
 
     monkeypatch.setattr(main, "yf", Exploding())
     monkeypatch.setattr(main.Config, "STOCK_TICKERS", {"A": "A.NS"})
+    main._quote_cache.update({"key": None, "at": 0.0, "value": None})
 
     r = client.get("/stock-prices")
 
-    assert r.status_code == 200
-    assert "yfinance is down" in r.json()["error"]
+    assert r.status_code == 502
+    assert "yfinance is down" in r.json()["detail"]
 
 
 # ------------------------------------------------------- /news-impact/{c}
@@ -114,11 +172,7 @@ def test_news_impact_with_no_articles(client, main, monkeypatch):
 def test_news_impact_scales_positive_sentiment(
     client, main, monkeypatch, labelled_pipeline
 ):
-    """CHARACTERISES DUP-01: the endpoint's scaling is mean(score*10) * 2.
-
-    A single positive article at score 0.9 must yield 0.9*10*2 = 18.0. Phase 3
-    collapses three different scalings into one; this pins the surviving value.
-    """
+    """A single positive article at score 0.9 yields 0.9 * IMPACT_SCALE = 18.0."""
     monkeypatch.setattr(main, "fetch_news", lambda company: ["Profits soar"])
     main.sentiment_pipeline = labelled_pipeline([("positive", 0.9)])
 
@@ -185,8 +239,8 @@ def test_news_impact_runs_the_pipeline_once_for_the_whole_batch(
     assert calls[0] == ["a", "b", "c", "d"]
 
 
-def test_news_impact_returns_200_with_error_key_on_failure(client, main, monkeypatch):
-    """CHARACTERISES ERR-01."""
+def test_news_impact_returns_502_when_the_news_api_fails(client, main, monkeypatch):
+    """ERR-01 fixed."""
 
     def boom(company):
         raise RuntimeError("news api down")
@@ -195,8 +249,8 @@ def test_news_impact_returns_200_with_error_key_on_failure(client, main, monkeyp
 
     r = client.get("/news-impact/Reliance")
 
-    assert r.status_code == 200
-    assert "news api down" in r.json()["error"]
+    assert r.status_code == 502
+    assert "news api down" in r.json()["detail"]
 
 
 # ------------------------------------------------------------- /Indicotor
@@ -221,11 +275,15 @@ def _post_indicator(client, owned=False):
     )
 
 
-def test_indicator_reports_missing_stock_data(client, main, monkeypatch):
+def test_indicator_returns_404_for_an_unknown_ticker(client, main, monkeypatch):
+    """ERR-01 fixed: an unknown ticker is a 404, not a 200 with an error key."""
     monkeypatch.setattr(main, "fetch_news", lambda c: [])
     monkeypatch.setattr(main, "fetch_stock_indicators", lambda t: None)
 
-    assert _post_indicator(client).json() == {"error": "Stock data not available"}
+    r = _post_indicator(client)
+
+    assert r.status_code == 404
+    assert "RELIANCE.NS" in r.json()["detail"]
 
 
 @pytest.mark.parametrize(
@@ -287,31 +345,31 @@ def test_indicator_rejects_a_malformed_body(client):
 
 
 def _fake_yf(days=90):
-    return FakeYFinance(
-        download_frame=ohlcv(days=days),
-        history_frame=history_2d(prev_close=100.0, last_close=110.0),
-    )
+    return FakeYFinance(download_frame=ohlcv(days=days))
 
 
-def test_predict_reports_unavailable_stock_data(client, main, monkeypatch):
+def test_predict_returns_404_for_an_unknown_ticker(client, main, monkeypatch):
+    """ERR-01 fixed."""
     monkeypatch.setattr(main, "yf", FakeYFinance(download_frame=pd.DataFrame()))
     monkeypatch.setattr(main, "fetch_news", lambda c: [])
 
-    body = client.get("/predict_stock?ticker=RELIANCE.NS").json()
+    r = client.get("/predict_stock?ticker=NOSUCH.NS")
 
-    assert body == {"error": "Stock data not available"}
+    assert r.status_code == 404
+    assert "NOSUCH.NS" in r.json()["detail"]
 
 
-def test_predict_reports_insufficient_training_data(client, main, monkeypatch):
+def test_predict_returns_422_when_the_range_is_too_short_to_train(
+    client, main, monkeypatch
+):
     """Fewer rows than forecast_out leaves no row with a known future target."""
-    monkeypatch.setattr(
-        main, "yf", FakeYFinance(download_frame=ohlcv(days=3), history_frame=history_2d())
-    )
+    monkeypatch.setattr(main, "yf", FakeYFinance(download_frame=ohlcv(days=3)))
     monkeypatch.setattr(main, "fetch_news", lambda c: [])
 
-    body = client.get("/predict_stock?ticker=RELIANCE.NS&forecast_out=7").json()
+    r = client.get("/predict_stock?ticker=RELIANCE.NS&forecast_out=7")
 
-    assert body == {"error": "Not enough data to train the model"}
+    assert r.status_code == 422
+    assert "Widen the date range" in r.json()["detail"]
 
 
 def test_predict_returns_history_and_forecast(client, main, monkeypatch):
@@ -321,7 +379,10 @@ def test_predict_returns_history_and_forecast(client, main, monkeypatch):
     body = client.get("/predict_stock?ticker=RELIANCE.NS&forecast_out=7").json()
 
     assert body["name"] == "RELIANCE.NS"
-    assert body["curprice"] == 110.0
+    # ohlcv() rises by 1.0/day from 100.0, so the final close is 189.0 and the
+    # one before it 188.0 -- derived from the downloaded frame, not a second call.
+    assert body["curprice"] == 189.0
+    assert body["stock_prices"][0]["percent_change"] == pytest.approx(0.53, abs=0.01)
     assert len(body["Hdata"]) == 90
     assert all(p["type"] == "historical" for p in body["Hdata"])
 
@@ -367,12 +428,8 @@ def test_predict_sentiment_shifts_the_forecast(client, main, monkeypatch, labell
     assert bull_first > flat_first
 
 
-def test_predict_downloads_the_same_ticker_twice(client, main, monkeypatch):
-    """CHARACTERISES PERF-02: one yf.download plus a separate yf.Ticker call.
-
-    Phase 4 derives current price from the frame already downloaded; when it
-    does, `ticker_calls` should be empty and this test should fail.
-    """
+def test_predict_fetches_the_ticker_exactly_once(client, main, monkeypatch):
+    """PERF-02 fixed: current price comes from the frame already downloaded."""
     fake = _fake_yf()
     monkeypatch.setattr(main, "yf", fake)
     monkeypatch.setattr(main, "fetch_news", lambda c: [])
@@ -380,7 +437,7 @@ def test_predict_downloads_the_same_ticker_twice(client, main, monkeypatch):
     client.get("/predict_stock?ticker=RELIANCE.NS")
 
     assert [t for t, _ in fake.download_calls] == ["RELIANCE.NS"]
-    assert fake.ticker_calls == ["RELIANCE.NS"]
+    assert fake.ticker_calls == [], "no second round trip for the current price"
 
 
 def test_predict_post_and_get_agree(client, main, monkeypatch):
@@ -407,8 +464,8 @@ def test_predict_post_and_get_agree(client, main, monkeypatch):
     assert len(got["data"]) == len(posted["data"])
 
 
-def test_predict_returns_200_with_error_key_on_failure(client, main, monkeypatch):
-    """CHARACTERISES ERR-01."""
+def test_predict_returns_502_when_the_upstream_fails(client, main, monkeypatch):
+    """ERR-01 fixed."""
 
     class Exploding(FakeYFinance):
         def download(self, *a, **kw):
@@ -419,5 +476,13 @@ def test_predict_returns_200_with_error_key_on_failure(client, main, monkeypatch
 
     r = client.get("/predict_stock?ticker=RELIANCE.NS")
 
-    assert r.status_code == 200
-    assert "network unreachable" in r.json()["error"]
+    assert r.status_code == 502
+    assert "network unreachable" in r.json()["detail"]
+
+
+def test_predict_does_not_mask_a_404_as_a_502(client, main, monkeypatch):
+    """The broad handler must re-raise HTTPException, not swallow it."""
+    monkeypatch.setattr(main, "yf", FakeYFinance(download_frame=pd.DataFrame()))
+    monkeypatch.setattr(main, "fetch_news", lambda c: [])
+
+    assert client.get("/predict_stock?ticker=NOSUCH.NS").status_code == 404
