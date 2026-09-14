@@ -88,7 +88,13 @@ app.post('/users/login', (req, res) => {
     res.status(200).json({ message: 'Login successful', user });
   });
 });
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+// Export the app so tests can mount it without binding a port.
+export { app };
+export default app;
+
+// Only listen when run directly (`ts-node src/server.ts`), not when imported.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
