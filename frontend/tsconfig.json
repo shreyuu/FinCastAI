@@ -10,6 +10,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
@@ -22,6 +23,6 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.node.json" }
   ]
 }
