@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>FinCastAI — Forecasts that show their work</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="assets/audio-data.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden; background: #f1f5f9;
+      }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        /* The app sets font-family: "Inter", sans-serif in frontend/src/index.css.
+           No webfont is fetched at render time; the system stack stands in. */
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        color: #111827;
+        -webkit-font-smoothing: antialiased;
+        /* Audio-reactive channels, updated per frame from assets/audio-data.js. */
+        --rms: 0.3; --bass: 0.2; --treb: 0.15;
+      }
+      .scene-inner { position: absolute; inset: 0; }
+
+      /* ---------- shared app chrome (from frontend/src) ---------- */
+      .pale { background: linear-gradient(135deg, #eff6ff 0%, #ffffff 46%, #dbeafe 100%); }
+      .mark-bars { display: block; }
+
+      /* ---------- Scene 1 — the handoff ---------- */
+      #s1-wash {
+        position: absolute; left: 50%; top: 42%; width: 1500px; height: 900px;
+        margin-left: -750px; margin-top: -450px; border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(59,130,246,0.16), rgba(59,130,246,0) 72%);
+        opacity: calc(0.45 + var(--rms) * 0.55);
+      }
+      .s1-stage {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 64px;
+      }
+      .s1-lines { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+      .s1-line { font-size: 62px; font-weight: 300; letter-spacing: 0.012em; color: #111827; }
+      .s1-line strong { font-weight: 600; }
+
+      /* ---------- Scene 2 — dashboard ---------- */
+      .app { position: absolute; inset: 0; display: flex; background: #f1f5f9; }
+      .sidebar {
+        width: 240px; height: 100%; flex: 0 0 240px;
+        background: linear-gradient(180deg, #ffffff 0%, #eff6ff 55%, #dbeafe 100%);
+        box-shadow: 4px 0 18px rgba(15, 23, 42, 0.06);
+        display: flex; flex-direction: column; justify-content: space-between;
+        padding: 40px 22px;
+      }
+      .sb-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 46px; }
+      .sb-logo span { font-size: 24px; font-weight: 700; color: #2563eb; letter-spacing: 0.02em; }
+      .sb-nav { display: flex; flex-direction: column; gap: 8px; }
+      .sb-item {
+        display: flex; align-items: center; gap: 14px;
+        padding: 13px 12px; border-radius: 12px;
+        font-size: 19px; font-weight: 500; color: #374151;
+      }
+      .sb-item.active { background: #2563eb; color: #ffffff; box-shadow: 0 4px 10px rgba(37,99,235,0.28); }
+      .sb-foot { font-size: 15px; color: #4b5563; text-align: center; }
+
+      .main { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; }
+      .topbar {
+        height: 84px; flex: 0 0 84px; background: #ffffff; border-bottom: 1px solid #e5e7eb;
+        display: flex; align-items: center; justify-content: space-between; padding: 0 32px;
+      }
+      .topbar h1 { font-size: 29px; font-weight: 700; color: #2563eb; letter-spacing: 0.02em; }
+      .top-right { display: flex; align-items: center; gap: 18px; }
+      .pill {
+        display: flex; align-items: center; gap: 9px; padding: 11px 20px;
+        border-radius: 11px; font-size: 18px; font-weight: 600;
+      }
+      .pill.blue { background: #dbeafe; color: #1d4ed8; }
+      .pill.green { background: #dcfce7; color: #15803d; }
+      .whoami { font-size: 18px; font-weight: 500; color: #374151; }
+
+      .summary {
+        margin: 26px 32px 0; background: #ffffff; border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(15,23,42,0.06); padding: 22px 30px;
+        display: flex; gap: 72px; align-items: center;
+      }
+      .summary h2 { font-size: 23px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+      .summary p, .summary h3 { font-size: 19px; color: #4b5563; font-weight: 400; }
+      .summary h3 { font-weight: 600; color: #111827; margin-bottom: 4px; }
+      .summary .val { font-weight: 700; color: #111827; }
+      .summary .up { color: #15803d; font-weight: 600; }
+
+      .predcard {
+        margin: 24px 32px 0; background: #ffffff; border-radius: 12px;
+        padding: 26px 30px 18px;
+        box-shadow: 0 6px calc(18px + var(--bass) * 22px) rgba(15, 23, 42, 0.09);
+      }
+      .ctrlrow { display: flex; align-items: center; gap: 22px; height: 56px; }
+      .inputbox {
+        position: relative; width: 330px; height: 56px; border: 1px solid #d1d5db;
+        border-radius: 10px; display: flex; align-items: center; padding: 0 16px;
+        background: #ffffff;
+      }
+      .inputbox.focused { border-color: transparent; box-shadow: 0 0 0 3px rgba(59,130,246,0.45); }
+      #s2-placeholder { font-size: 20px; color: #6b7280; position: absolute; left: 16px; }
+      #s2-typed {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 21px; color: #111827; letter-spacing: 0.04em;
+        white-space: nowrap; overflow: hidden; width: 0;
+        border-right: 2px solid rgba(37,99,235,0);
+        padding-right: 3px;
+      }
+      .searchbtn {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        height: 56px; width: 168px; border-radius: 10px;
+        background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+        color: #ffffff; font-size: 20px; font-weight: 600;
+        box-shadow: 0 6px 18px rgba(59, 130, 246, 0.24);
+      }
+      #s2-spinner { display: flex; align-items: center; justify-content: center; opacity: 0; position: absolute; }
+      .searchbtn-inner { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 100%; }
+      .quote { display: flex; align-items: baseline; gap: 14px; opacity: 0; }
+      .quote .price { font-size: 26px; font-weight: 700; color: #111827; }
+      .quote .chg { font-size: 22px; font-weight: 600; color: #15803d; }
+      .zoomsel {
+        margin-left: auto; height: 56px; width: 176px; border-radius: 10px;
+        background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+        color: #ffffff; font-size: 19px; font-weight: 600;
+        display: flex; align-items: center; justify-content: space-between; padding: 0 18px;
+        box-shadow: 0 6px 18px rgba(59, 130, 246, 0.24);
+      }
+      .chartwrap { position: relative; margin-top: 18px; height: 600px; display: flex; align-items: center; justify-content: center; }
+      .chartmsg { position: absolute; font-size: 24px; color: #4b5563; }
+      #s2-chart { opacity: 0; }
+
+      #s2-cursor { position: absolute; left: 0; top: 0; width: 30px; height: 36px; opacity: 0; }
+
+      /* ---------- Scene 3 — the call ---------- */
+      .indic-main {
+        flex: 1; height: 100%; min-width: 0;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 48%, #dbeafe 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 40px 60px;
+      }
+      .indic-title { font-size: 40px; font-weight: 700; color: #2563eb; margin-bottom: 26px; }
+      .rescard {
+        width: 1180px; background: #ffffff; border-radius: 18px; padding: 36px 40px 34px;
+        box-shadow: 0 14px 40px rgba(15, 23, 42, 0.10);
+      }
+      .rescard h2 { font-size: 32px; font-weight: 700; color: #2563eb; margin-bottom: 24px; }
+      .panels { display: flex; gap: 26px; margin-bottom: 28px; }
+      .panel { flex: 1; border-radius: 12px; padding: 22px 26px; }
+      .panel.blue { background: #eff6ff; }
+      .panel.green { background: #f0fdf4; }
+      .panel h3 { font-size: 21px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+      .panel .big { font-size: 54px; font-weight: 800; color: #1d4ed8; line-height: 1.05; }
+      .decision { position: relative; height: 58px; }
+      .decision > div { position: absolute; left: 0; top: 0; font-size: 46px; font-weight: 800; line-height: 1.2; }
+      #s3-dash { color: #6b7280; }
+      #s3-buy { color: #15803d; opacity: 0; }
+      .ti-label { font-size: 21px; font-weight: 600; color: #374151; margin-bottom: 14px; }
+      .ti-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .ti-card {
+        background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px;
+        padding: 18px 22px; display: flex; align-items: baseline; gap: 12px;
+        box-shadow: 0 1px 3px rgba(15,23,42,0.05); opacity: 0;
+      }
+      .ti-card .k { font-size: 21px; font-weight: 700; color: #374151; }
+      .ti-card .v { font-size: 26px; font-weight: 600; color: #111827; }
+      .bb {
+        grid-column: 1 / -1; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px;
+        padding: 16px 22px; display: flex; align-items: baseline; gap: 26px;
+        box-shadow: 0 1px 3px rgba(15,23,42,0.05); opacity: 0;
+      }
+      .bb .k { font-size: 21px; font-weight: 700; color: #374151; }
+      .bb .pair { font-size: 22px; color: #111827; }
+      .bb .pair em { font-style: normal; font-size: 17px; color: #4b5563; margin-right: 5px; }
+      .rescaption { margin-top: 24px; font-size: 24px; color: #4b5563; opacity: 0; text-align: center; }
+
+      /* ---------- Scene 4 — receipts ---------- */
+      .outro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+      #s4-mark { display: flex; align-items: center; gap: 22px; opacity: 0; }
+      #s4-mark .word { font-size: 86px; font-weight: 700; color: #2563eb; letter-spacing: 0.01em; }
+      #s4-markicon {
+        display: flex; border-radius: 16px; padding: 6px;
+        box-shadow: 0 0 calc(10px + var(--treb) * 46px) rgba(59, 130, 246, calc(0.18 + var(--treb) * 0.42));
+      }
+      #s4-tag { font-size: 40px; font-weight: 300; color: #374151; letter-spacing: 0.015em; opacity: 0; }
+      #s4-receipts {
+        margin-top: 14px; font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 25px; color: #475569; letter-spacing: 0.06em; opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-43rb" id="root" data-composition-id="main" data-start="0" data-duration="20.1" data-width="1920" data-height="1080" data-fps="30">
+      <!-- ============ Scene 1 — the handoff (0.00 → 4.75, out by 5.25) ============ -->
+      <section data-hf-id="hf-zcoq" id="s1" class="clip pale" data-start="0" data-duration="5.25" data-track-index="0">
+        <div data-hf-id="hf-bbya" class="scene-inner" id="s1-inner">
+          <div data-hf-id="hf-vb1z" id="s1-wash"></div>
+          <div data-hf-id="hf-tab5" class="s1-stage">
+            <svg data-hf-id="hf-5wgf" id="s1-chart" width="1240" height="260" viewBox="0 0 1240 260" fill="none">
+              <defs data-hf-id="hf-mh0t">
+                <clippath data-hf-id="hf-qo7q" id="s1-fclip">
+                  <rect data-hf-id="hf-yrhp" id="s1-fclip-rect" x="700" y="-20" width="0" height="300" />
+                </clippath>
+              </defs>
+              <path data-hf-id="hf-0czj" id="s1-hist" d="M0,208 L58,196 L116,204 L174,182 L232,190 L290,168 L348,176 L406,152 L464,162 L522,138 L580,146 L638,124 L700,118" stroke="#10B981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+              <line data-hf-id="hf-r8ms" id="s1-rule" x1="700" y1="14" x2="700" y2="248" stroke="#cbd5e1" stroke-width="3" stroke-dasharray="9 9" opacity="0" />
+              <g data-hf-id="hf-87gw" clip-path="url(#s1-fclip)">
+                <path data-hf-id="hf-9mpc" id="s1-fore" d="M700,118 L768,112 L836,103 L904,99 L972,90 L1040,86 L1108,78 L1176,72 L1240,68" stroke="#FF9933" stroke-width="5" stroke-dasharray="15 13" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+              </g>
+            </svg>
+            <div data-hf-id="hf-x54e" class="s1-lines">
+              <div data-hf-id="hf-3uhz" class="s1-line" id="s1-l1">Where the history ends,</div>
+              <div data-hf-id="hf-2ikm" class="s1-line" id="s1-l2">the model <strong data-hf-id="hf-7mx4">keeps going.</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Scene 2 — search a ticker (4.75 → 10.01, out by 10.51) ============ -->
+      <section data-hf-id="hf-bel2" id="s2" class="clip" data-start="4.75" data-duration="5.76" data-track-index="1">
+        <div data-hf-id="hf-gs0d" class="scene-inner" id="s2-inner">
+          <div data-hf-id="hf-gk5l" class="app">
+            <aside data-hf-id="hf-842t" class="sidebar">
+              <div data-hf-id="hf-yeow">
+                <div data-hf-id="hf-rild" class="sb-logo">
+                  <svg data-hf-id="hf-8e84" class="mark-bars" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round">
+                    <line data-hf-id="hf-viqb" x1="18" y1="20" x2="18" y2="10" /><line data-hf-id="hf-f4w4" x1="12" y1="20" x2="12" y2="4" /><line data-hf-id="hf-797h" x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                  <span data-hf-id="hf-kxr3">FinCastAI</span>
+                </div>
+                <nav data-hf-id="hf-wnup" class="sb-nav">
+                  <div data-hf-id="hf-03fl" class="sb-item active">
+                    <svg data-hf-id="hf-99fx" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect data-hf-id="hf-vnja" x="3" y="3" width="7" height="9" /><rect data-hf-id="hf-c8hy" x="14" y="3" width="7" height="5" /><rect data-hf-id="hf-gs9m" x="14" y="12" width="7" height="9" /><rect data-hf-id="hf-tm1i" x="3" y="16" width="7" height="5" /></svg>
+                    <span data-hf-id="hf-dw07">Dashboard</span>
+                  </div>
+                  <div data-hf-id="hf-0t3t" class="sb-item">
+                    <svg data-hf-id="hf-n7lt" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-bsil" d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path data-hf-id="hf-yfoc" d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path data-hf-id="hf-ufon" d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></svg>
+                    <span data-hf-id="hf-svoj">Indicators</span>
+                  </div>
+                  <div data-hf-id="hf-uvxp" class="sb-item">
+                    <svg data-hf-id="hf-oeiw" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-2fcw" d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V7h4" /><path data-hf-id="hf-83by" d="M10 6h8M10 10h8M10 14h4" /></svg>
+                    <span data-hf-id="hf-lebe">News</span>
+                  </div>
+                  <div data-hf-id="hf-w2us" class="sb-item">
+                    <svg data-hf-id="hf-cwel" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line data-hf-id="hf-iy9f" x1="18" y1="20" x2="18" y2="10" /><line data-hf-id="hf-lpz0" x1="12" y1="20" x2="12" y2="4" /><line data-hf-id="hf-fxbl" x1="6" y1="20" x2="6" y2="14" /></svg>
+                    <span data-hf-id="hf-njl3">Portfolio</span>
+                  </div>
+                </nav>
+              </div>
+              <div data-hf-id="hf-m42z" class="sb-foot">© 2026 FinCastAI</div>
+            </aside>
+
+            <div data-hf-id="hf-k15r" class="main">
+              <div data-hf-id="hf-mndw" class="topbar">
+                <h1 data-hf-id="hf-skce">FinCastAI Dashboard</h1>
+                <div data-hf-id="hf-p5hs" class="top-right">
+                  <div data-hf-id="hf-3xog" class="pill blue">
+                    <svg data-hf-id="hf-ytxr" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-jfaw" d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V7h4" /><path data-hf-id="hf-tl5b" d="M10 6h8M10 10h8" /></svg>
+                    News
+                  </div>
+                  <div data-hf-id="hf-8tva" class="pill green">
+                    <svg data-hf-id="hf-yrsf" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-gcoh" d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path data-hf-id="hf-bzdg" d="M3 5v14a2 2 0 0 0 2 2h16v-5" /></svg>
+                    Indicators
+                  </div>
+                  <div data-hf-id="hf-bqh0" class="whoami">Shreyash ⌄</div>
+                </div>
+              </div>
+
+              <div data-hf-id="hf-2x6g" class="summary">
+                <div data-hf-id="hf-y7yw">
+                  <h2 data-hf-id="hf-jdt6">Welcome, Shreyash</h2>
+                  <p data-hf-id="hf-rfuc">Last close (TCS): <span data-hf-id="hf-yjx7" class="val">₹3906.35</span></p>
+                </div>
+                <div data-hf-id="hf-x11t">
+                  <h3 data-hf-id="hf-0zxo">Today's move</h3>
+                  <p data-hf-id="hf-re43" class="up">TCS: +1.24%</p>
+                </div>
+              </div>
+
+              <div data-hf-id="hf-pipp" class="predcard" id="s2-card">
+                <div data-hf-id="hf-n9kl" class="ctrlrow">
+                  <div data-hf-id="hf-a84t" class="inputbox" id="s2-input">
+                    <span data-hf-id="hf-8b0x" id="s2-placeholder" data-layout-allow-overlap="">Enter Stock Ticker (e.g. TCS.NS)</span>
+                    <span data-hf-id="hf-jt4c" id="s2-typed" data-layout-allow-overflow="">TCS.NS</span>
+                  </div>
+                  <div data-hf-id="hf-mf52" class="searchbtn" id="s2-btn">
+                    <div data-hf-id="hf-fusf" class="searchbtn-inner">
+                      <div data-hf-id="hf-0os8" id="s2-btnlabel" style="display: flex; align-items: center; gap: 10px">
+                        <svg data-hf-id="hf-cch9" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle data-hf-id="hf-r9ft" cx="11" cy="11" r="7" /><line data-hf-id="hf-9qgu" x1="21" y1="21" x2="16.7" y2="16.7" /></svg>
+                        Search
+                      </div>
+                      <div data-hf-id="hf-3lbe" id="s2-spinner">
+                        <svg data-hf-id="hf-xc06" width="24" height="24" viewBox="0 0 24 24" fill="none"><circle data-hf-id="hf-9dkr" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25" /><path data-hf-id="hf-vsrf" d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.85" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-hf-id="hf-ki4e" class="quote" id="s2-quote">
+                    <span data-hf-id="hf-k2jt" class="price">₹3906.35</span>
+                    <span data-hf-id="hf-hgq5" class="chg">(+1.24) ↑</span>
+                  </div>
+                  <div data-hf-id="hf-vspv" class="zoomsel">
+                    <span data-hf-id="hf-ku5l">Month</span>
+                    <svg data-hf-id="hf-zd5j" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline data-hf-id="hf-nt9k" points="6 9 12 15 18 9" /></svg>
+                  </div>
+                </div>
+
+                <div data-hf-id="hf-9luc" class="chartwrap">
+                  <div data-hf-id="hf-7yck" class="chartmsg" id="s2-empty">No data available</div>
+                  <div data-hf-id="hf-9eti" class="chartmsg" id="s2-loading" style="opacity: 0">Loading chart...</div>
+                  <svg data-hf-id="hf-su6k" id="s2-chart" width="1560" height="560" viewBox="0 0 1560 560" fill="none">
+                    <defs data-hf-id="hf-vl9d">
+                      <clippath data-hf-id="hf-8j4x" id="s2-fclip">
+                        <rect data-hf-id="hf-t521" id="s2-fclip-rect" x="1080" y="0" width="0" height="470" />
+                      </clippath>
+                    </defs>
+                    <g data-hf-id="hf-yjwg" stroke="#e5e7eb" stroke-width="1.4" stroke-dasharray="3 3">
+                      <line data-hf-id="hf-j2tw" x1="110" y1="30" x2="1520" y2="30" /><line data-hf-id="hf-ukho" x1="110" y1="130" x2="1520" y2="130" />
+                      <line data-hf-id="hf-s6yy" x1="110" y1="230" x2="1520" y2="230" /><line data-hf-id="hf-clq8" x1="110" y1="330" x2="1520" y2="330" />
+                      <line data-hf-id="hf-ftfu" x1="110" y1="430" x2="1520" y2="430" />
+                    </g>
+                    <g data-hf-id="hf-l2ga" fill="#6b7280" font-size="19" text-anchor="end" font-family="ui-sans-serif, system-ui, sans-serif">
+                      <text data-hf-id="hf-eyd3" x="96" y="37">₹4100.00</text><text data-hf-id="hf-zkkx" x="96" y="137">₹4000.00</text>
+                      <text data-hf-id="hf-ff86" x="96" y="237">₹3900.00</text><text data-hf-id="hf-ornq" x="96" y="337">₹3800.00</text>
+                      <text data-hf-id="hf-xcou" x="96" y="437">₹3700.00</text>
+                    </g>
+                    <g data-hf-id="hf-ogrf" fill="#6b7280" font-size="18" text-anchor="end" font-family="ui-sans-serif, system-ui, sans-serif">
+                      <text data-hf-id="hf-lg2v" transform="translate(190,452) rotate(-45)">18/8/2026</text>
+                      <text data-hf-id="hf-mqpz" transform="translate(420,452) rotate(-45)">25/8/2026</text>
+                      <text data-hf-id="hf-2et9" transform="translate(650,452) rotate(-45)">1/9/2026</text>
+                      <text data-hf-id="hf-rm4j" transform="translate(880,452) rotate(-45)">8/9/2026</text>
+                      <text data-hf-id="hf-8dmg" transform="translate(1110,452) rotate(-45)">15/9/2026</text>
+                      <text data-hf-id="hf-hgrg" transform="translate(1400,452) rotate(-45)">22/9/2026</text>
+                    </g>
+                    <path data-hf-id="hf-xvsm" id="s2-hist" d="M110,392 L184,364 L258,381 L332,340 L406,356 L480,318 L554,334 L628,296 L702,311 L776,272 L850,288 L924,246 L998,258 L1080,224" stroke="#10B981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                    <g data-hf-id="hf-ve45" clip-path="url(#s2-fclip)">
+                      <path data-hf-id="hf-ciaw" d="M1080,224 L1168,213 L1256,200 L1344,190 L1432,177 L1520,166" stroke="#FF9933" stroke-width="3.5" stroke-dasharray="11 9" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                    </g>
+                    <g data-hf-id="hf-yju9" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#374151">
+                      <line data-hf-id="hf-yb78" x1="560" y1="540" x2="600" y2="540" stroke="#10B981" stroke-width="3.5" stroke-linecap="round" />
+                      <text data-hf-id="hf-7j8q" x="610" y="547">Historical Price</text>
+                      <line data-hf-id="hf-chkc" x1="830" y1="540" x2="870" y2="540" stroke="#FF9933" stroke-width="3.5" stroke-dasharray="7 6" stroke-linecap="round" />
+                      <text data-hf-id="hf-a7un" x="880" y="547">Predicted Price</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <svg data-hf-id="hf-vuu1" id="s2-cursor" viewBox="0 0 24 28" fill="none">
+            <path data-hf-id="hf-f450" d="M3 2 L3 22 L8.4 17 L11.6 24.5 L14.8 23 L11.6 15.6 L19 15.6 Z" fill="#111827" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </section>
+
+      <!-- ============ Scene 3 — the call (10.01 → 15.81, out by 16.31) ============ -->
+      <section data-hf-id="hf-apmp" id="s3" class="clip" data-start="10.01" data-duration="6.3" data-track-index="2">
+        <div data-hf-id="hf-tktc" class="scene-inner" id="s3-inner">
+          <div data-hf-id="hf-8l4t" class="app">
+            <aside data-hf-id="hf-cfzt" class="sidebar">
+              <div data-hf-id="hf-xfcu">
+                <div data-hf-id="hf-bcad" class="sb-logo">
+                  <svg data-hf-id="hf-w470" class="mark-bars" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round">
+                    <line data-hf-id="hf-ijye" x1="18" y1="20" x2="18" y2="10" /><line data-hf-id="hf-kj1x" x1="12" y1="20" x2="12" y2="4" /><line data-hf-id="hf-h48o" x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                  <span data-hf-id="hf-8va7">FinCastAI</span>
+                </div>
+                <nav data-hf-id="hf-xoet" class="sb-nav">
+                  <div data-hf-id="hf-vojr" class="sb-item">
+                    <svg data-hf-id="hf-o07v" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect data-hf-id="hf-omlm" x="3" y="3" width="7" height="9" /><rect data-hf-id="hf-5xxm" x="14" y="3" width="7" height="5" /><rect data-hf-id="hf-ia7y" x="14" y="12" width="7" height="9" /><rect data-hf-id="hf-aim2" x="3" y="16" width="7" height="5" /></svg>
+                    <span data-hf-id="hf-sl7r">Dashboard</span>
+                  </div>
+                  <div data-hf-id="hf-sqr9" class="sb-item active">
+                    <svg data-hf-id="hf-m0oq" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-hjlk" d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path data-hf-id="hf-asgd" d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path data-hf-id="hf-ai6f" d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></svg>
+                    <span data-hf-id="hf-fp7n">Indicators</span>
+                  </div>
+                  <div data-hf-id="hf-wvgu" class="sb-item">
+                    <svg data-hf-id="hf-lmdp" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-hf-id="hf-i8dt" d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V7h4" /><path data-hf-id="hf-q476" d="M10 6h8M10 10h8M10 14h4" /></svg>
+                    <span data-hf-id="hf-ngwu">News</span>
+                  </div>
+                  <div data-hf-id="hf-wh5t" class="sb-item">
+                    <svg data-hf-id="hf-cv29" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line data-hf-id="hf-i5nd" x1="18" y1="20" x2="18" y2="10" /><line data-hf-id="hf-kxcy" x1="12" y1="20" x2="12" y2="4" /><line data-hf-id="hf-gpxn" x1="6" y1="20" x2="6" y2="14" /></svg>
+                    <span data-hf-id="hf-wk1z">Portfolio</span>
+                  </div>
+                </nav>
+              </div>
+              <div data-hf-id="hf-1laj" class="sb-foot">© 2026 FinCastAI</div>
+            </aside>
+
+            <div data-hf-id="hf-757v" class="indic-main">
+              <div data-hf-id="hf-dtxo" class="indic-title" id="s3-title">Stock Impact &amp; Technical Indicators</div>
+              <div data-hf-id="hf-vdan" class="rescard" id="s3-card">
+                <h2 data-hf-id="hf-93ax" id="s3-heading">Results for Tata Consultancy Services (TCS.NS)</h2>
+                <div data-hf-id="hf-86bp" class="panels">
+                  <div data-hf-id="hf-mnut" class="panel blue" id="s3-impact">
+                    <h3 data-hf-id="hf-e2za">Impact</h3>
+                    <div data-hf-id="hf-9006" class="big" id="s3-impact-val">0.0%</div>
+                  </div>
+                  <div data-hf-id="hf-px5q" class="panel green" id="s3-trade">
+                    <h3 data-hf-id="hf-kpto">Trade Decision</h3>
+                    <div data-hf-id="hf-tlgq" class="decision">
+                      <div data-hf-id="hf-71hc" id="s3-dash">—</div>
+                      <div data-hf-id="hf-wgkg" id="s3-buy">Buy</div>
+                    </div>
+                  </div>
+                </div>
+                <div data-hf-id="hf-fnmx" class="ti-label" id="s3-tilabel">Technical Indicators</div>
+                <div data-hf-id="hf-jwe2" class="ti-grid">
+                  <div data-hf-id="hf-n821" class="ti-card" id="s3-c1"><span data-hf-id="hf-827w" class="k">RSI:</span><span data-hf-id="hf-it3s" class="v">58.24</span></div>
+                  <div data-hf-id="hf-r662" class="ti-card" id="s3-c2"><span data-hf-id="hf-nuq9" class="k">EMA:</span><span data-hf-id="hf-aba3" class="v">3842.10</span></div>
+                  <div data-hf-id="hf-v4a3" class="ti-card" id="s3-c3"><span data-hf-id="hf-p895" class="k">MACD:</span><span data-hf-id="hf-45rd" class="v">12.47</span></div>
+                  <div data-hf-id="hf-7msk" class="ti-card" id="s3-c4"><span data-hf-id="hf-i6lh" class="k">OBV:</span><span data-hf-id="hf-hmdr" class="v">4128630.0</span></div>
+                  <div data-hf-id="hf-q62p" class="bb" id="s3-bb">
+                    <span data-hf-id="hf-5pvs" class="k">Bollinger Bands:</span>
+                    <span data-hf-id="hf-1pii" class="pair"><em data-hf-id="hf-3euf">Low:</em>3714.82</span>
+                    <span data-hf-id="hf-yb8t" class="pair"><em data-hf-id="hf-846j">Mid:</em>3856.40</span>
+                    <span data-hf-id="hf-f2l9" class="pair"><em data-hf-id="hf-7m2w">Up:</em>3998.01</span>
+                  </div>
+                </div>
+              </div>
+              <div data-hf-id="hf-robw" class="rescaption" id="s3-caption" data-layout-allow-caption-zone="">
+                FinBERT reads the news. RSI checks it isn't already overbought.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Scene 4 — receipts (15.81 → 20.10) ============ -->
+      <section data-hf-id="hf-yybo" id="s4" class="clip pale" data-start="15.81" data-duration="4.29" data-track-index="3">
+        <div data-hf-id="hf-qvcj" class="scene-inner" id="s4-inner">
+          <div data-hf-id="hf-e0lx" class="outro">
+            <div data-hf-id="hf-23n2" id="s4-mark">
+              <div data-hf-id="hf-but9" id="s4-markicon">
+                <svg data-hf-id="hf-12al" width="76" height="76" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round">
+                  <line data-hf-id="hf-hrcc" x1="18" y1="20" x2="18" y2="10" /><line data-hf-id="hf-mww3" x1="12" y1="20" x2="12" y2="4" /><line data-hf-id="hf-eqei" x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+              </div>
+              <div data-hf-id="hf-go8c" class="word">FinCastAI</div>
+            </div>
+            <div data-hf-id="hf-qk20" id="s4-tag">Forecasts that show their work.</div>
+            <div data-hf-id="hf-5wlf" id="s4-receipts" data-layout-allow-caption-zone="">62 tests. Real status codes.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ audio ============ -->
+      <audio data-hf-id="hf-81k8" id="bgm" src="assets/music/happy-beats-business-moves-vol-11-by-ende-dot-app.mp3" data-start="0" data-duration="20.1" data-track-index="10" data-volume="1"></audio>
+
+      <audio data-hf-id="hf-ekce" id="sfx-handoff" src="assets/sfx/interface/bong_001.ogg" data-start="1.55" data-duration="0.13" data-track-index="11" data-volume="0.32"></audio>
+      <audio data-hf-id="hf-ddql" id="sfx-key1" src="assets/sfx/keyboard/keypress-004.wav" data-start="5.47" data-duration="0.25" data-track-index="12" data-volume="0.3"></audio>
+      <audio data-hf-id="hf-3x59" id="sfx-key2" src="assets/sfx/keyboard/keypress-011.wav" data-start="5.58" data-duration="0.25" data-track-index="13" data-volume="0.3"></audio>
+      <audio data-hf-id="hf-0tfj" id="sfx-key3" src="assets/sfx/keyboard/keypress-019.wav" data-start="5.69" data-duration="0.25" data-track-index="14" data-volume="0.3"></audio>
+      <audio data-hf-id="hf-aelm" id="sfx-suffix" src="assets/sfx/interface/click_005.ogg" data-start="5.8" data-duration="0.02" data-track-index="15" data-volume="0.24"></audio>
+      <audio data-hf-id="hf-va0x" id="sfx-search" src="assets/sfx/interface/click_003.ogg" data-start="6.34" data-duration="0.02" data-track-index="16" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-z7qg" id="sfx-chart" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="8.44" data-duration="0.14" data-track-index="17" data-volume="0.36"></audio>
+      <audio data-hf-id="hf-r0j7" id="sfx-buy" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="12.65" data-duration="0.12" data-track-index="18" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-154x" id="sfx-card1" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="13.18" data-duration="0.15" data-track-index="19" data-volume="0.18"></audio>
+      <audio data-hf-id="hf-jg82" id="sfx-card2" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="13.7" data-duration="0.15" data-track-index="20" data-volume="0.18"></audio>
+      <audio data-hf-id="hf-zqho" id="sfx-card3" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="14.22" data-duration="0.15" data-track-index="21" data-volume="0.18"></audio>
+      <audio data-hf-id="hf-3zvb" id="sfx-card4" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="14.76" data-duration="0.15" data-track-index="22" data-volume="0.18"></audio>
+      <audio data-hf-id="hf-un38" id="sfx-mark" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="16.34" data-duration="0.19" data-track-index="23" data-volume="0.34"></audio>
+    </div>
+
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        var root = document.getElementById("root");
+        var $ = function (id) { return document.getElementById(id); };
+
+        // ---------------------------------------------------------------
+        // Measurements taken once at build time (never per frame), so the
+        // typing animation is a plain deterministic width tween.
+        // ---------------------------------------------------------------
+        var typed = $("s2-typed");
+        typed.style.width = "auto";
+        typed.textContent = "TCS";
+        var wTCS = typed.getBoundingClientRect().width;
+        typed.textContent = "TCS.NS";
+        var wFULL = typed.getBoundingClientRect().width;
+        typed.style.width = "0px";
+
+        var histLen = $("s1-hist").getTotalLength();
+        var s2HistLen = $("s2-hist").getTotalLength();
+
+        // ===============================================================
+        // SCENE 1 — the handoff (0.00 → 4.75)
+        // ===============================================================
+        tl.fromTo("#s1-inner", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power2.out" }, 0);
+
+        gsap.set("#s1-hist", { strokeDasharray: histLen, strokeDashoffset: histLen });
+        tl.to("#s1-hist", { strokeDashoffset: 0, duration: 1.2, ease: "power1.inOut" }, 0.2);
+
+        tl.fromTo("#s1-rule", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 1.35);
+
+        // The solid→dashed handoff — the hook's one moment of attention.
+        // sfx: interface/bong_001.ogg at 1.55
+        tl.to("#s1-fclip-rect", { attr: { width: 560 }, duration: 0.9, ease: "power2.out" }, 1.55);
+
+        // Reading floor: "Where the history ends," settles at 1.95 and holds 2.80s.
+        tl.fromTo("#s1-l1", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 1.6);
+        // "the model keeps going." settles at 3.25 and holds 1.50s.
+        tl.fromTo("#s1-l2", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 2.9);
+
+        tl.to("#s1-inner", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 4.75);
+
+        // ===============================================================
+        // SCENE 2 — search a ticker (4.75 → 10.01)
+        // ===============================================================
+        tl.fromTo("#s2-inner", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 4.75);
+
+        // Cursor travels to the ticker field.
+        tl.fromTo("#s2-cursor", { opacity: 0, x: 1180, y: 830 }, { opacity: 1, duration: 0.18 }, 5.02);
+        tl.to("#s2-cursor", { x: 470, y: 452, duration: 0.42, ease: "power2.inOut" }, 5.02);
+        tl.to("#s2-placeholder", { opacity: 0, duration: 0.12 }, 5.4);
+        tl.call(function () { $("s2-input").classList.add("focused"); }, [], 5.42);
+        tl.set("#s2-typed", { borderRightColor: "rgba(37,99,235,1)" }, 5.42);
+
+        // "TCS" types in, one character per step.
+        // sfx: keypress-004 / -011 / -019 at 5.47 / 5.58 / 5.69
+        tl.to("#s2-typed", { width: wTCS, duration: 0.33, ease: "steps(3)" }, 5.45);
+        // The real frontend appends ".NS" itself when the field loses focus
+        // (handleBlur in components/StockPrediction.tsx).
+        // beat-locked: 5.80s  (sfx: interface/click_005)
+        tl.to("#s2-typed", { width: wFULL, duration: 0.1, ease: "steps(1)" }, 5.8);
+        tl.to("#s2-typed", { borderRightColor: "rgba(37,99,235,0)", duration: 0.15 }, 5.95);
+        tl.call(function () { $("s2-input").classList.remove("focused"); }, [], 5.95);
+
+        // Cursor to Search, then the press.
+        tl.to("#s2-cursor", { x: 782, y: 452, duration: 0.34, ease: "power2.inOut" }, 5.98);
+        // beat-locked: 6.34s  (sfx: interface/click_003)
+        tl.fromTo("#s2-btn", { scale: 1 }, { scale: 0.965, duration: 0.09, ease: "power2.out" }, 6.34);
+        tl.to("#s2-btn", { scale: 1, duration: 0.16, ease: "power2.inOut" }, 6.43);
+        tl.to("#s2-cursor", { opacity: 0, duration: 0.2 }, 6.5);
+
+        // The card passes through the same two states the app renders:
+        // "No data available" → "Loading chart..." → the chart.
+        tl.to("#s2-empty", { opacity: 0, duration: 0.12 }, 6.36);
+        tl.to("#s2-loading", { opacity: 1, duration: 0.12 }, 6.42);
+        tl.to("#s2-loading", { opacity: 0, duration: 0.14 }, 6.84);
+
+        // Loading state — the button's spinner, exactly as the app renders it.
+        tl.to("#s2-btnlabel", { opacity: 0, duration: 0.1 }, 6.36);
+        tl.to("#s2-spinner", { opacity: 1, duration: 0.1 }, 6.4);
+        tl.fromTo("#s2-spinner", { rotation: 0 }, { rotation: 720, duration: 0.5, ease: "none", transformOrigin: "50% 50%" }, 6.4);
+        tl.to("#s2-spinner", { opacity: 0, duration: 0.1 }, 6.86);
+        tl.to("#s2-btnlabel", { opacity: 1, duration: 0.14 }, 6.9);
+
+        // beat-locked: 6.86s — the result lands and the chart draws.
+        tl.to("#s2-chart", { opacity: 1, duration: 0.2 }, 6.86);
+        tl.fromTo("#s2-quote", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.28, ease: "power2.out" }, 6.86);
+        gsap.set("#s2-hist", { strokeDasharray: s2HistLen, strokeDashoffset: s2HistLen });
+        tl.to("#s2-hist", { strokeDashoffset: 0, duration: 0.84, ease: "power1.inOut" }, 6.86);
+        // The forecast continues past the present. Settles on the beat at 8.44.
+        // sfx: impact/impactSoft_medium_002 at 8.44
+        tl.to("#s2-fclip-rect", { attr: { width: 452 }, duration: 0.7, ease: "power2.out" }, 7.7);
+
+        tl.to("#s2-inner", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 10.01);
+
+        // ===============================================================
+        // SCENE 3 — the call (10.01 → 15.81)
+        // ===============================================================
+        tl.fromTo("#s3-inner", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 10.01);
+        tl.fromTo("#s3-card", { scale: 0.985, y: 14 }, { scale: 1, y: 0, duration: 0.55, ease: "power3.out" }, 10.05);
+        tl.fromTo("#s3-heading", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 10.6);
+
+        // Impact counts up. Reads the same at every seek: value is a pure
+        // function of tween progress, never of a clock.
+        var counter = { v: 0 };
+        tl.fromTo("#s3-impact", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, ease: "power2.out" }, 11.06);
+        tl.to(counter, {
+          v: 6.4, duration: 1.05, ease: "power1.out", snap: { v: 0.1 },
+          onUpdate: function () { $("s3-impact-val").textContent = "+" + counter.v.toFixed(1) + "%"; }
+        }, 11.2);
+
+        tl.fromTo("#s3-trade", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, ease: "power2.out" }, 11.6);
+        // The decision resolves. beat-locked: 12.65s (sfx: impact/impactSoft_medium_000)
+        tl.to("#s3-dash", { opacity: 0, duration: 0.12 }, 12.55);
+        tl.fromTo("#s3-buy", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.34, ease: "back.out(1.6)", transformOrigin: "0% 50%" }, 12.65);
+
+        // The caption holds 4.5s — it is the longest read in the video.
+        tl.fromTo("#s3-caption", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 11.3);
+        tl.fromTo("#s3-tilabel", { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, 12.9);
+
+        // beat-grid: RSI 13.18, EMA 13.70, MACD 14.22, OBV 14.76 (every beat at
+        // 114.84 BPM). These are short numeric labels that persist to the cut,
+        // so each one is settled well past the 0.8s floor.
+        [["#s3-c1", 13.18], ["#s3-c2", 13.7], ["#s3-c3", 14.22], ["#s3-c4", 14.76]].forEach(function (pair) {
+          tl.fromTo(pair[0], { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, pair[1]);
+        });
+        tl.fromTo("#s3-bb", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 14.76);
+
+        tl.to("#s3-inner", { opacity: 0, duration: 0.5, ease: "power2.inOut" }, 15.81);
+
+        // ===============================================================
+        // SCENE 4 — receipts (15.81 → 20.10)
+        // ===============================================================
+        tl.fromTo("#s4-inner", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 15.81);
+        // beat-locked: 16.34s (sfx: impact/impactSoft_medium_001)
+        tl.fromTo("#s4-mark", { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" }, 16.2);
+        tl.fromTo("#s4-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 16.86);
+        // beat-locked: 17.91s — the receipts line, held for the last 1.8s.
+        tl.fromTo("#s4-receipts", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, 17.91);
+
+        // ===============================================================
+        // AUDIO — one bed, thirteen accents, nothing celebratory.
+        // ===============================================================
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.34, duration: 1.1, ease: "power1.in" }, 0);
+        tl.to("#bgm", { volume: 0.4, duration: 0.6, ease: "power1.inOut" }, 11.9);
+        tl.to("#bgm", { volume: 0.34, duration: 0.8, ease: "power1.inOut" }, 14.0);
+        tl.to("#bgm", { volume: 0, duration: 1.6, ease: "power1.in" }, 18.5);
+
+        // ===============================================================
+        // AUDIO-REACTIVE — subtle only. Per-frame data pre-extracted from the
+        // bed (assets/audio-data.js). It breathes the hook's warmth, the
+        // dashboard card's shadow, and the outro wordmark's glow. No waveform,
+        // no equalizer, no visualizer.
+        // ===============================================================
+        if (typeof AUDIO_DATA !== "undefined" && AUDIO_DATA.frames) {
+          var apply = function (f) {
+            return function () {
+              root.style.setProperty("--rms", f.rms.toFixed(3));
+              root.style.setProperty("--bass", f.bands[0].toFixed(3));
+              root.style.setProperty("--treb", f.bands[2].toFixed(3));
+            };
+          };
+          for (var i = 0; i < AUDIO_DATA.totalFrames; i++) {
+            tl.call(apply(AUDIO_DATA.frames[i]), [], i / AUDIO_DATA.fps);
+          }
+        }
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </body>
+</html>
