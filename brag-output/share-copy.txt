@@ -1,0 +1,3 @@
+FinCastAI: SVR price forecasts and FinBERT news sentiment for NSE-listed stocks, in one dashboard.
+FastAPI + React + 62 tests — and a README that documents what doesn't work yet.
+Educational project, not investment advice.
