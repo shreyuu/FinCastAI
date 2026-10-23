@@ -49,8 +49,9 @@ from app import main as main_module  # noqa: E402  (must follow the stub above)
 
 @pytest.fixture
 def main():
-    """The imported `main` module, with its pipeline reset between tests."""
+    """The imported `main` module, with its pipeline and rate limits reset between tests."""
     main_module.sentiment_pipeline = StubPipeline()
+    main_module.limiter.reset()
     return main_module
 
 

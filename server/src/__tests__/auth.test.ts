@@ -13,12 +13,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import bcrypt from "bcryptjs";
 // vi.mock below is hoisted above this import, so `app` gets the fake db.
-import { app } from "../server";
+import { app, loginLimiterStore, signupLimiterStore } from "../server";
 
 /** Rows the fake database will return for the next SELECT. */
 let selectRows: Record<string, unknown>[] = [];
 /** Error the fake database will raise, if any. */
 let queryError: Error | null = null;
+/** Error the fake database will raise for INSERTs only, if any. */
+let insertError: (Error & { code?: string; sql?: string }) | null = null;
 /** Every (sql, params) pair the app issued. */
 let issued: Array<{ sql: string; params: unknown[] }> = [];
 
@@ -28,15 +30,19 @@ vi.mock("../db/connection", () => ({
       issued.push({ sql, params });
       if (queryError) return cb(queryError, null);
       if (/^\s*SELECT/i.test(sql)) return cb(null, selectRows);
+      if (insertError) return cb(insertError, null);
       return cb(null, { insertId: 42, affectedRows: 1 });
     },
   },
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
   selectRows = [];
   queryError = null;
+  insertError = null;
   issued = [];
+  await loginLimiterStore.resetAll();
+  await signupLimiterStore.resetAll();
 });
 
 const validUser = {
@@ -149,7 +155,7 @@ describe("POST /users/login", () => {
       .send({ email: storedUser.email, password: "wrong-password" });
 
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe("Incorrect password.");
+    expect(res.body.error).toBe("Invalid email or password.");
     expect(res.body).not.toHaveProperty("user");
   });
 
@@ -181,15 +187,23 @@ describe("POST /users/login", () => {
     }
   });
 
-  it("returns 404 for an unknown email", async () => {
-    selectRows = [];
-
-    const res = await request(app)
+  it("answers an unknown email exactly like a wrong password (SEC-09)", async () => {
+    selectRows = [{ ...storedUser }];
+    const wrong = await request(app)
       .post("/users/login")
-      .send({ email: "nobody@example.com", password: "x" });
+      .send({ email: storedUser.email, password: "wrong-password" });
 
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe("User not found.");
+    selectRows = [];
+    const compare = vi.spyOn(bcrypt, "compare");
+    const unknown = await request(app)
+      .post("/users/login")
+      .send({ email: "nobody@example.com", password: "wrong-password" });
+
+    expect(unknown.status).toBe(401);
+    expect(unknown.body).toEqual(wrong.body);
+    // A bcrypt compare still runs, so response time does not reveal the account.
+    expect(compare).toHaveBeenCalledTimes(1);
+    compare.mockRestore();
   });
 
   it("returns 500 when the database errors", async () => {
@@ -224,6 +238,154 @@ describe("POST /users/login", () => {
       .send({ email: storedUser.email, password: storedUser.password });
 
     expect(res.status).toBe(401);
+  });
+});
+
+describe("non-string fields (SEC-03: mysql2 expands objects into SQL)", () => {
+  it.each([
+    ["an object email", { email: { email: 1 }, password: "guess" }],
+    ["an array email", { email: ["a@x.com", "b@x.com"], password: "guess" }],
+    ["an object password", { email: "asha@example.com", password: { a: 1 } }],
+    ["a missing email", { password: "guess" }],
+  ])("rejects a login with %s before querying", async (_label, body) => {
+    const res = await request(app).post("/users/login").send(body);
+
+    expect(res.status).toBe(400);
+    expect(issued).toHaveLength(0);
+  });
+
+  it.each(["name", "email", "password", "dob", "gender"])(
+    "rejects a signup whose %s is not a string",
+    async (field) => {
+      const res = await request(app)
+        .post("/users")
+        .send({ ...validUser, [field]: { [field]: 1 } });
+
+      expect(res.status).toBe(400);
+      expect(issued).toHaveLength(0);
+    }
+  );
+});
+
+describe("server-side signup validation (SEC-08)", () => {
+  it.each([
+    ["a password under 6 characters", { password: "12345" }, /password/i],
+    ["an email with no domain", { email: "not-an-email" }, /email/i],
+    ["an email over 254 characters", { email: `${"a".repeat(250)}@x.com` }, /email/i],
+    ["an unknown gender", { gender: "Robot" }, /gender/i],
+    ["a dob not in YYYY-MM-DD form", { dob: "12/04/1995" }, /date of birth/i],
+    ["a dob that is not a real date", { dob: "1995-02-30" }, /date of birth/i],
+    ["a dob in the future", { dob: "2999-01-01" }, /date of birth/i],
+    ["a name over 255 characters", { name: "a".repeat(256) }, /name/i],
+    ["a blank name", { name: "   " }, /name/i],
+  ])("rejects %s with 400 before querying", async (_label, override, message) => {
+    const res = await request(app).post("/users").send({ ...validUser, ...override });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(message);
+    expect(issued).toHaveLength(0);
+  });
+});
+
+describe("CORS (SEC-12)", () => {
+  it("does not grant an unknown origin cross-origin access", async () => {
+    const res = await request(app)
+      .post("/users/login")
+      .set("Origin", "https://evil.example")
+      .send({ email: "a@b.co", password: "whatever" });
+
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("allows the configured frontend origin", async () => {
+    const res = await request(app)
+      .options("/users/login")
+      .set("Origin", "http://localhost:5173")
+      .set("Access-Control-Request-Method", "POST");
+
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+  });
+});
+
+describe("error logging (SEC-13)", () => {
+  it("never logs the SQL text mysql2 attaches to errors", async () => {
+    insertError = Object.assign(new Error("Data too long for column"), {
+      code: "ER_DATA_TOO_LONG",
+      sql: "INSERT INTO users VALUES ('Asha Rao', 'asha@example.com', '$2a$10$hashhash')",
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(app).post("/users").send(validUser);
+
+    const output = logged.mock.calls
+      .flat()
+      .map((arg) =>
+        typeof arg === "string" ? arg : JSON.stringify(arg, Object.getOwnPropertyNames(arg ?? {}))
+      )
+      .join("\n");
+    logged.mockRestore();
+    expect(res.status).toBe(500);
+    expect(output).not.toContain("asha@example.com");
+    expect(output).not.toContain("$2a$10$");
+  });
+});
+
+describe("concurrent duplicate signup (SEC-14)", () => {
+  it("maps a unique-key violation on INSERT to 409, not 500", async () => {
+    insertError = Object.assign(new Error("Duplicate entry"), { code: "ER_DUP_ENTRY" });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(app).post("/users").send(validUser);
+
+    vi.mocked(console.error).mockRestore();
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("User already exists.");
+  });
+});
+
+describe("fingerprinting headers (SEC-15)", () => {
+  it("does not advertise Express", async () => {
+    const res = await request(app).post("/users/login").send({});
+
+    expect(res.headers["x-powered-by"]).toBeUndefined();
+  });
+});
+
+describe("rate limiting (SEC-06)", () => {
+  it("blocks an IP after 10 failed logins in the window", async () => {
+    selectRows = [
+      { id: 1, email: "asha@example.com", password: await bcrypt.hash("right", 4) },
+    ];
+    const attempt = () =>
+      request(app).post("/users/login").send({ email: "asha@example.com", password: "wrong" });
+
+    for (let i = 0; i < 10; i++) expect((await attempt()).status).toBe(401);
+
+    const blocked = await attempt();
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error).toMatch(/too many/i);
+  });
+
+  it("does not count successful logins against the limit", async () => {
+    selectRows = [
+      { id: 1, email: "asha@example.com", password: await bcrypt.hash("right", 4) },
+    ];
+    const login = () =>
+      request(app).post("/users/login").send({ email: "asha@example.com", password: "right" });
+
+    for (let i = 0; i < 12; i++) expect((await login()).status).toBe(200);
+  });
+
+  it("blocks an IP after 5 signups in the window", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post("/users")
+        .send({ ...validUser, email: `user${i}@example.com` });
+      expect(res.status).toBe(201);
+    }
+
+    const blocked = await request(app).post("/users").send(validUser);
+    expect(blocked.status).toBe(429);
   });
 });
 

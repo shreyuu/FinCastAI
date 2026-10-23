@@ -9,3 +9,4 @@ torch        # only if model requires it
 ta
 requests
 python-dotenv
+slowapi      # per-IP rate limiting (SEC-06)
