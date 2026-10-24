@@ -29,6 +29,12 @@ class Config:
     # === CORS Configuration ===
     ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
+    # === Rate limiting ===
+    # One per-IP budget shared by the routes that train a model or spend a
+    # NewsData credit (/predict, /predict_stock, /Indicotor, /news-impact).
+    # Syntax: https://limits.readthedocs.io/en/stable/quickstart.html#rate-limit-string-notation
+    RATE_LIMIT_EXPENSIVE = os.getenv("RATE_LIMIT_EXPENSIVE", "10/minute")
+
     # === Market Configuration ===
     MARKET_HOLIDAYS_2025 = [
         "2025-01-01",

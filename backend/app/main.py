@@ -1,6 +1,10 @@
 import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -8,15 +12,16 @@ from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import date, datetime
 import requests
 from transformers import pipeline
 from pandas.tseries.offsets import BDay
-from typing import List, Dict, Optional  # ensure Optional is available
+from typing import Annotated, List, Dict, Optional
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import ta
 import time
 import threading
+import traceback
 
 # ============================================================
 # Configuration Import
@@ -26,31 +31,72 @@ from .config import Config
 # Initialize FinBERT Sentiment Analysis Pipeline
 sentiment_pipeline = pipeline("text-classification", model=Config.FINBERT_MODEL)
 
+# The routes that call yfinance are plain `def`, so FastAPI runs them in a
+# threadpool instead of blocking the event loop. yfinance itself is not
+# thread-safe: yf.download resets the module-global `shared._DFS` on every call,
+# and concurrent calls can hand one request another request's ticker. Every
+# yfinance call goes through this lock.
+_yf_lock = threading.Lock()
+
 # FastAPI App Setup
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=Config.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    # No cookies or auth headers are used. With credentials on, Starlette
+    # answers a "*" origin list by reflecting whatever Origin the caller sends.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Per-IP, in-memory, per process. Behind a reverse proxy every client shares
+# the proxy's address unless uvicorn runs with --proxy-headers.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+expensive_limit = limiter.shared_limit(Config.RATE_LIMIT_EXPENSIVE, scope="expensive")
+
+
+@app.exception_handler(RateLimitExceeded)
+def too_many_requests(request: Request, exc: RateLimitExceeded):
+    # `detail` is the key the frontend already displays for errors.
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests. Please wait a minute and try again."},
+    )
+
+
+# ============================================================
+# Input bounds
+# ============================================================
+# Yahoo symbols such as RELIANCE.NS, M&M.NS, ^NSEI, BRK-B and EURUSD=X. No
+# spaces or commas: yf.download treats those as a list of tickers to fetch.
+TICKER_PATTERN = r"^[A-Za-z0-9.^=&-]{1,20}$"
+MAX_FORECAST_DAYS = 30
+MAX_COMPANY_LENGTH = 100
+# About ten years of trading days. SVR fit time grows faster than linearly
+# with rows, so this bounds the CPU one request can use.
+MAX_TRAINING_ROWS = 2520
+
+Ticker = Annotated[str, Field(pattern=TICKER_PATTERN)]
+Company = Annotated[str, Field(min_length=1, max_length=MAX_COMPANY_LENGTH)]
+ForecastDays = Annotated[int, Field(ge=1, le=MAX_FORECAST_DAYS)]
 
 
 # ============================================================
 # Pydantic Models
 # ============================================================
 class StockRequest2(BaseModel):
-    company: str
-    ticker: str
+    company: Company
+    ticker: Ticker
     owned_stock: bool
 
 
 class StockRequest(BaseModel):
-    ticker: str
-    start_date: str
-    end_date: str
-    forecast_out: int = 7
+    ticker: Ticker
+    start_date: date
+    end_date: date
+    forecast_out: ForecastDays = 7
 
 
 class NewsResponse(BaseModel):
@@ -135,10 +181,12 @@ def fetch_news(company: str) -> List[str]:
     """
     Fetch latest news articles for a company using NewsData.io API
     """
-    url = f"https://newsdata.io/api/1/news?apikey={Config.NEWS_API_KEY}&q={company}&country=in"
+    url = "https://newsdata.io/api/1/news"
+    # Let requests encode the query so a company like "M&M" stays one value.
+    params = {"apikey": Config.NEWS_API_KEY, "q": company, "country": "in"}
 
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
@@ -150,7 +198,10 @@ def fetch_news(company: str) -> List[str]:
             for article in data["results"]
         ]
     except Exception as e:
-        print(f"Error fetching news: {str(e)}")
+        # requests puts the full URL, API key included, in its error text, so
+        # log only the error type and HTTP status.
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        print(f"Error fetching news: {type(e).__name__} (status {status})")
         return []
 
 
@@ -202,8 +253,10 @@ def sentiment_impact(news_list: List[str]) -> float:
 # Technical Indicators
 # ============================================================
 def fetch_stock_indicators(ticker):
-    stock = yf.Ticker(ticker)
-    df = stock.history(period="1mo", interval="1d")
+    # Three months (~63 sessions): MACD's slow EMA needs 26, which one month
+    # (~21) does not cover, and the NaN result was then filled as 0.
+    with _yf_lock:
+        df = yf.Ticker(ticker).history(period="3mo", interval="1d")
 
     if df.empty:
         return None
@@ -225,12 +278,39 @@ def fetch_stock_indicators(ticker):
 # Stock Prediction Endpoint
 # ============================================================
 @app.post("/predict", response_model=PredictionResponse)
-async def predict_stock(data: StockRequest):
+@expensive_limit
+def predict_stock(request: Request, data: StockRequest):
+    return _predict(data)
+
+
+def _predict(data: StockRequest):
     """
     Predict stock prices using historical data, sentiment analysis, and SVR
     """
+    if data.start_date >= data.end_date:
+        raise HTTPException(
+            status_code=422, detail="start_date must be before end_date."
+        )
+
     try:
-        stock_data = yf.download(data.ticker, start=data.start_date, end=data.end_date)
+        with _yf_lock:
+            stock_data = yf.download(
+                data.ticker,
+                start=data.start_date.isoformat(),
+                end=data.end_date.isoformat(),
+            )
+
+        # yfinance >= 0.2.51 returns ('Close', 'TCS.NS')-style MultiIndex
+        # columns even for one ticker; everything below expects flat names.
+        if isinstance(stock_data.columns, pd.MultiIndex):
+            fields = stock_data.columns.get_level_values(0)
+            level = 0 if "Close" in fields else 1
+            stock_data.columns = stock_data.columns.get_level_values(level)
+
+        # Yahoo can include the current, unfinished session with no Close yet.
+        # A NaN price can't be charted and makes the JSON response fail.
+        if "Close" in stock_data.columns:
+            stock_data = stock_data.dropna(subset=["Close"])
 
         if stock_data.empty:
             raise HTTPException(
@@ -272,6 +352,7 @@ async def predict_stock(data: StockRequest):
                     f"{data.forecast_out}-day forecast. Widen the date range."
                 ),
             )
+        train_data = train_data.tail(MAX_TRAINING_ROWS)
 
         X = train_data[feature_cols].values
         y = train_data["Target"].values
@@ -352,11 +433,14 @@ async def predict_stock(data: StockRequest):
 
     except HTTPException:
         raise
-    except Exception as e:
-        import traceback
-
+    except Exception:
+        # The traceback goes to the server log; the client gets a fixed message
+        # rather than internal exception text.
         print(traceback.format_exc())
-        raise HTTPException(status_code=502, detail=f"Prediction failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="Prediction failed: the market data provider or model returned an error.",
+        )
 
 
 # ============================================================
@@ -419,14 +503,15 @@ def _fetch_quotes(tickers: Dict[str, str]) -> List[Dict[str, object]]:
         ):
             return list(_quote_cache["value"])  # type: ignore[arg-type]
 
-    frame = yf.download(
-        " ".join(tickers.values()),
-        period="5d",
-        interval="1d",
-        group_by="ticker",
-        progress=False,
-        auto_adjust=True,
-    )
+    with _yf_lock:
+        frame = yf.download(
+            " ".join(tickers.values()),
+            period="5d",
+            interval="1d",
+            group_by="ticker",
+            progress=False,
+            auto_adjust=True,
+        )
 
     quotes = [
         {"name": name, **_quote_from_closes(_closes_for(frame, ticker))}
@@ -439,12 +524,14 @@ def _fetch_quotes(tickers: Dict[str, str]) -> List[Dict[str, object]]:
 
 
 @app.get("/stock-prices", response_model=StockPricesResponse)
-async def get_stock_prices():
+def get_stock_prices():
     try:
         return {"stocks": _fetch_quotes(Config.STOCK_TICKERS)}
-    except Exception as e:
+    except Exception:
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=502, detail=f"Failed to fetch stock prices: {e}"
+            status_code=502,
+            detail="Failed to fetch stock prices from the market data provider.",
         )
 
 
@@ -452,7 +539,11 @@ async def get_stock_prices():
 # News Sentiment Endpoint
 # ============================================================
 @app.get("/news-impact/{company}", response_model=NewsResponse)
-async def news_impact(company: str):
+@expensive_limit
+def news_impact(
+    request: Request,
+    company: Annotated[str, Path(min_length=1, max_length=MAX_COMPANY_LENGTH)],
+):
     try:
         news_list = fetch_news(company)
         if not news_list:
@@ -481,9 +572,11 @@ async def news_impact(company: str):
         return {"company": company, "impact": float(impact), "reasons": reasons}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=502, detail=f"Failed to analyze news impact: {e}"
+            status_code=502,
+            detail="Failed to analyze news impact: the news or sentiment service returned an error.",
         )
 
 
@@ -491,7 +584,8 @@ async def news_impact(company: str):
 # Indicator & Trade Decision Endpoint
 # ============================================================
 @app.post("/Indicotor", response_model=IndicatorResponse)
-def predict_stock_impact(stock_request: StockRequest2):
+@expensive_limit
+def predict_stock_impact(request: Request, stock_request: StockRequest2):
     news_list = fetch_news(stock_request.company)
     sentiment_score = analyze_sentiment(news_list)
     stock_data = fetch_stock_indicators(stock_request.ticker)
@@ -542,14 +636,16 @@ async def health():
 # Provide a lightweight GET wrapper so frontend code using GET /predict_stock can still work.
 # This constructs the expected request model and delegates to the existing POST handler.
 @app.get("/predict_stock", response_model=PredictionResponse)
-async def predict_stock_get(
-    ticker: str,
-    start_date: str = "2020-01-01",
-    end_date: Optional[str] = None,
-    forecast_out: int = 7,
+@expensive_limit
+def predict_stock_get(
+    request: Request,
+    ticker: Annotated[str, Query(pattern=TICKER_PATTERN)],
+    start_date: date = date(2020, 1, 1),
+    end_date: Optional[date] = None,
+    forecast_out: Annotated[int, Query(ge=1, le=MAX_FORECAST_DAYS)] = 7,
 ):
     if end_date is None:
-        end_date = datetime.today().strftime("%Y-%m-%d")
+        end_date = date.today()
     # Use the same Pydantic model that the POST /predict endpoint expects
     req = StockRequest(
         ticker=ticker,
@@ -557,7 +653,7 @@ async def predict_stock_get(
         end_date=end_date,
         forecast_out=forecast_out,
     )
-    return await predict_stock(req)
+    return _predict(req)
 
 
 # ============================================================

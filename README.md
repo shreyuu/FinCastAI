@@ -29,11 +29,11 @@ A 20-second launch video: [brag-output/brag.mp4](brag-output/brag.mp4). The dash
 
 - **Price forecasts:** an RBF-kernel SVR, trained per request on daily prices since 2020, predicts the next seven trading days. Weekends and the configured NSE holidays are skipped.
 - **News sentiment:** NewsData.io headlines are scored by FinBERT in one batch. The mean signed score (−1 to 1) moves the forecast by up to ±10%, and the News page tags each headline Positive, Negative or Neutral.
-- **Indicators and a trade call:** EMA (20), RSI (14), MACD, Bollinger Bands and OBV from the last month of prices, combined with sentiment into Buy, Sell, Hold, Avoid or No Action depending on whether you already hold the stock.
+- **Indicators and a trade call:** EMA (20), RSI (14), MACD, Bollinger Bands and OBV from the last three months of prices, combined with sentiment into Buy, Sell, Hold, Avoid or No Action depending on whether you already hold the stock.
 - **Market snapshot:** the landing page shows the latest price and day-over-day change for NSE large caps, fetched in a single batched Yahoo Finance call and cached for 60 seconds.
 - **Interactive chart:** solid historical and dashed predicted series (Recharts) with All Time, Year, Month and Week zoom plus a range brush. Typing `TCS` completes to `TCS.NS`.
 - **Accounts:** sign-up and login against MySQL with bcrypt-hashed passwords, plus an operator CLI for forced password resets.
-- **Explicit errors, offline tests:** 404, 422 and 502 responses carry readable messages, and the pytest and Vitest suites run without network access, a model download or a database.
+- **Explicit errors, offline tests:** 404, 422, 429 and 502 responses carry readable messages, and the pytest and Vitest suites run without network access, a model download or a database.
 
 ## Tech stack
 
@@ -96,13 +96,13 @@ Login returns `{ id, name, email }`, which the browser keeps in `localStorage` t
 1. Download daily OHLCV for the ticker from Yahoo Finance, from 2020-01-01 to today by default.
 2. Fetch Indian news for the company (the ticker without its suffix, e.g. `TCS`) from NewsData.io and score it with FinBERT, giving a sentiment `s` between −1 and 1.
 3. Build features (Open, High, Low, Close, Volume and `s`) with the close `forecast_out` sessions later as the target (default 7).
-4. Standardise, then fit `SVR(kernel="rbf", C=1e3, gamma=0.1)` on 80% of the rows that have a known target. MSE, RMSE, MAE, MAPE and R² on the other 20% are printed to the server log.
+4. Standardise, then fit `SVR(kernel="rbf", C=1e3, gamma=0.1)` on 80% of the rows that have a known target (at most the latest 2,520, about ten years, so one request can't monopolise the CPU). MSE, RMSE, MAE, MAPE and R² on the other 20% are printed to the server log.
 5. Predict from the latest `forecast_out` rows and scale the result by `1 + 0.1 × s`.
 6. Date the forecast on the following trading days, skipping weekends and the holidays listed in [config.py](backend/app/config.py).
 
 ### How the trade call is made
 
-`POST /Indicotor` computes the indicators from one month of daily prices, then applies this rule, with sentiment measured as above:
+`POST /Indicotor` computes the indicators from three months of daily prices (MACD needs 26 sessions), then applies this rule, with sentiment measured as above:
 
 | Sentiment | RSI | You hold the stock | Decision |
 | --- | --- | --- | --- |
@@ -116,7 +116,8 @@ Login returns `{ id, name, email }`, which the browser keeps in `localStorage` t
 
 - **Train on demand.** There is no stored model. Each forecast fits a fresh scaler and SVR on the requested window, so results follow the latest data at the cost of latency on every request.
 - **Batch the slow parts.** FinBERT scores all of a request's headlines in one call. `/stock-prices` fetches every ticker in one yfinance download and caches the result for 60 seconds behind a lock. `/predict` takes the current quote from the frame it already downloaded instead of making a second call.
-- **Real status codes.** An unknown ticker returns 404, a window too short to train on returns 422, and a failing dependency returns 502, each with a `detail` message that the dashboard displays as-is.
+- **Real status codes.** An unknown ticker returns 404, a window too short to train on or an out-of-range parameter returns 422, too many requests returns 429, and a failing dependency returns 502, each with a `detail` message that the dashboard displays as-is. The 502 message is fixed; the exception itself goes to the server log.
+- **Rate limits.** The routes that train a model or spend a NewsData credit share one per-IP budget (10 a minute by default). The auth server allows 10 failed logins per 15 minutes and 5 sign-ups per hour per IP. Limits are held in memory per process; behind a reverse proxy, forward the client address (uvicorn `--proxy-headers`, Express `trust proxy`) or every client shares one budget.
 - **bcrypt with a forced-reset path.** Passwords are bcrypt hashes (10 rounds). Accounts from before hashing were blanked by [migration 001](server/migrations/001_force_password_reset.sql) and get `403 PASSWORD_RESET_REQUIRED` until an operator sets a new password. There is deliberately no self-service reset: without email verification it would be an account-takeover route.
 - **Offline tests.** [conftest.py](backend/tests/conftest.py) replaces `transformers.pipeline` before the app is imported, Yahoo Finance and NewsData.io are faked, and the auth tests mock the MySQL connection.
 
@@ -125,7 +126,7 @@ Login returns `{ id, name, email }`, which the browser keeps in `localStorage` t
 ### Prerequisites
 
 - **Python 3.9+** with pip <!-- TODO: pin a Python version; nothing in the repo declares one (no requires-python or .python-version) -->
-- **Node.js 22.12+ or 24+** with npm. The auth server's test runner (Vitest 5) requires it; the frontend alone runs on Node 20+.
+- **Node.js 22.12+ or 24+** with npm. The test runner (Vitest 5, used by the auth server and the frontend) requires it; the frontend's dev server and build alone run on Node 20+.
 - A **[NewsData.io](https://newsdata.io) API key** for news and sentiment.
 - **MySQL**, only if you want sign-up and login.
 - About 440 MB of disk and an internet connection for the FinBERT download on the API's first start.
@@ -208,6 +209,7 @@ Each service reads a `.env` file in its own directory. Copy the `.env.example` b
 | `NEWS_API_KEY` | For news and sentiment | none | NewsData.io key. Without it, news lookups fail quietly and sentiment is 0. |
 | `FINBERT_MODEL` | No | `ProsusAI/finbert` | Hugging Face model id. Its labels must be lowercase `positive`, `negative` and `neutral`; any other label scores as neutral. |
 | `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins, e.g. `http://localhost:5173`. |
+| `RATE_LIMIT_EXPENSIVE` | No | `10/minute` | Per-IP budget shared by `/predict`, `/predict_stock`, `/Indicotor` and `/news-impact`. |
 | `HOST` | No | `0.0.0.0` | Bind address. Only used by `python -m app.main`. |
 | `PORT` | No | `8000` | Port. Only used by `python -m app.main`; with uvicorn, pass `--port`. |
 
@@ -223,6 +225,7 @@ Each service reads a `.env` file in its own directory. Copy the `.env.example` b
 | `DB_NAME` | Yes | none | Database that holds the `users` table |
 | `DB_PORT` | No | `3306` | MySQL port |
 | `PORT` | No | `3001` | HTTP port. Keep it in sync with `VITE_AUTH_URL`. |
+| `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated browser origins allowed by CORS. Set it to the frontend's URL when deploying. |
 
 **Frontend** (`frontend/.env`; restart Vite after changing it)
 
@@ -261,12 +264,12 @@ Routes are defined in [App.tsx](frontend/src/App.tsx).
 | --- | --- | --- |
 | `GET` | `/health` | Liveness check; returns `{"status": "ok"}` |
 | `GET` | `/stock-prices` | Latest price, colour and percent change for the 15 tickers in `config.py` (cached 60 s) |
-| `GET` | `/predict_stock` | Forecast from query parameters: `ticker` (required), `start_date` (default `2020-01-01`), `end_date` (default today), `forecast_out` (default 7). Used by the dashboard. |
+| `GET` | `/predict_stock` | Forecast from query parameters: `ticker` (required; letters, digits and `. ^ = & -`, up to 20 characters), `start_date` (default `2020-01-01`), `end_date` (default today, after `start_date`), `forecast_out` (1 to 30, default 7). Used by the dashboard. |
 | `POST` | `/predict` | The same forecast from a JSON body `{ticker, start_date, end_date, forecast_out}` |
 | `GET` | `/news-impact/{company}` | FinBERT-tagged headlines and an impact percentage |
 | `POST` | `/Indicotor` | Indicators, sentiment impact and trade call for `{company, ticker, owned_stock}`. The path is spelled this way in the code. |
 
-Errors return `{"detail": ...}` with 404 (no market data for the ticker), 422 (date range too short to train on, or an invalid request) or 502 (a failure fetching prices or running the model). NewsData.io errors never fail a request; they count as "no news".
+Errors return `{"detail": ...}` with 404 (no market data for the ticker), 422 (date range too short to train on, or an invalid request), 429 (rate limit) or 502 (a failure fetching prices or running the model). NewsData.io errors never fail a request; they count as "no news".
 
 ```bash
 # Forecast the next 7 trading days for TCS
@@ -287,8 +290,8 @@ A forecast response contains `data` (historical points followed by forecast poin
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/users` | Sign up with `{name, email, password, dob, gender}`. 201 on success, 400 if a field is missing, 409 if the email already exists. |
-| `POST` | `/users/login` | Log in with `{email, password}`. 200 returns `{message, user: {id, name, email}}`; 401 wrong password, 403 `PASSWORD_RESET_REQUIRED`, 404 unknown email. |
+| `POST` | `/users` | Sign up with `{name, email, password, dob, gender}`. 201 on success; 400 if a field is missing or invalid (password at least 6 characters, `dob` a past `YYYY-MM-DD`, `gender` Male, Female or Other); 409 if the email already exists; 429 after 5 sign-ups per hour from one IP. |
+| `POST` | `/users/login` | Log in with `{email, password}`. 200 returns `{message, user: {id, name, email}}`; 400 if either field is missing; 401 `Invalid email or password.` for an unknown email or a wrong password alike; 403 `PASSWORD_RESET_REQUIRED`; 429 after 10 failed attempts in 15 minutes from one IP. |
 
 To set a password from the command line (hidden prompt, at least 6 characters, stored as a bcrypt hash):
 
@@ -344,15 +347,16 @@ npm test                           # or `npm run test:watch` to re-run on change
 ```
 
 ```bash
-# Frontend: ESLint, then type-check and production build
+# Frontend: Vitest, ESLint, then type-check and production build
 cd frontend
+npm test
 npm run lint
 npm run build                      # tsc -b, then vite build into dist/
 ```
 
 - Both suites run offline: no network, no FinBERT download and no database.
 - The backend suite covers all six routes plus the calendar, sentiment, news and indicator helpers. The test marked `CHARACTERISES ERR-01` pins current behaviour (a FinBERT failure is reported as neutral sentiment) and is meant to fail once that behaviour is fixed.
-- There are no frontend tests yet (`npm test` in `frontend/` only prints a pointer to the other suites), and no CI workflow.
+- The frontend has a small Vitest suite (`npm test` in `frontend/`). There is no CI workflow.
 
 ## Limitations and roadmap
 
@@ -360,7 +364,7 @@ npm run build                      # tsc -b, then vite build into dist/
 
 - **One model, retrained per request.** The SVR uses fixed hyperparameters (`C=1e3`, `gamma=0.1`), and its hold-out metrics only reach the server log, not the UI.
 - **The holiday calendar covers 2025 only.** `MARKET_HOLIDAYS_2025` in `config.py` is the only holiday list, so forecast dates after 2025 skip weekends but not exchange holidays.
-- **No real sessions.** Login returns the user record, which the browser keeps in `localStorage`. The prediction API is unauthenticated, pages have no route guards, and nothing is rate-limited.
+- **No real sessions.** Login returns the user record, which the browser keeps in `localStorage`. The prediction API is unauthenticated and pages have no route guards. Rate limits are per process and in memory.
 - **Portfolio is example data.** The Portfolio page renders clearly labelled sample holdings; there is no holdings store behind it.
 - **The landing-page search box isn't wired up.** Search from the dashboard instead.
 - **Research code is separate.** [svm.py](backend/app/svm.py), an SVC direction classifier with GridSearchCV tuning, runs standalone; the API doesn't import it.
@@ -370,7 +374,7 @@ npm run build                      # tsc -b, then vite build into dist/
 
 - Portfolio tracking backed by a real holdings store
 - The SVC direction classifier wired into the API
-- Session tokens and rate limiting on the auth server
+- Session tokens on the auth server
 - Token-based password reset by email
 
 <details>

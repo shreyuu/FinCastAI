@@ -150,6 +150,46 @@ def test_fetch_news_returns_empty_on_transport_error(main, monkeypatch):
     assert main.fetch_news("Reliance") == []
 
 
+def test_fetch_news_never_logs_the_api_key(main, monkeypatch, capsys):
+    """SEC-02: requests puts the full URL in its error text; it must not reach the log."""
+    monkeypatch.setattr(main.Config, "NEWS_API_KEY", "test-key-123")
+
+    def boom(*a, **kw):
+        raise main.requests.HTTPError(
+            "422 Client Error: for url: "
+            "https://newsdata.io/api/1/news?apikey=test-key-123&q=x"
+        )
+
+    monkeypatch.setattr(main.requests, "get", boom)
+
+    assert main.fetch_news("x" * 600) == []
+    assert "test-key-123" not in capsys.readouterr().out
+
+
+def test_fetch_news_encodes_the_company_as_a_query_parameter(main, monkeypatch):
+    """SEC-02: 'M&M' must reach NewsData intact, not split into extra parameters."""
+    seen = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": []}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        seen["params"] = kwargs.get("params")
+        return Resp()
+
+    monkeypatch.setattr(main.requests, "get", fake_get)
+
+    main.fetch_news("M&M")
+
+    assert "?" not in seen["url"]
+    assert seen["params"]["q"] == "M&M"
+
+
 # ------------------------------------------------ fetch_stock_indicators
 
 
@@ -171,3 +211,24 @@ def test_fetch_stock_indicators_computes_the_expected_columns(main, monkeypatch)
     for key in ("EMA", "RSI", "MACD", "Bollinger_Up", "Bollinger_Mid", "Bollinger_Low", "OBV"):
         assert key in row, f"{key} missing from indicator row"
     assert not pd.isna(row["RSI"])
+
+
+def test_fetch_stock_indicators_has_enough_history_for_macd(main, monkeypatch):
+    """BUG-01: MACD needs 26 sessions; one month (~21) left it NaN, then 0.0."""
+    from market_fixtures import ohlcv
+
+    rows_for_period = {"1mo": 21, "3mo": 63, "6mo": 126}
+
+    class PeriodAwareTicker:
+        def history(self, period=None, **_kw):
+            return ohlcv(days=rows_for_period[period])
+
+    class FakeYF:
+        def Ticker(self, _ticker):
+            return PeriodAwareTicker()
+
+    monkeypatch.setattr(main, "yf", FakeYF())
+
+    row = main.fetch_stock_indicators("RELIANCE.NS")
+
+    assert row["MACD"] != 0.0

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import { backendUrl } from "./services/api";
+import { sentimentOf } from "./sentiment";
 
 interface NewsReason {
   sentiment: string;
@@ -35,11 +36,7 @@ function NewspaperSec() {
       setImpact(data.impact);
       setReasons(
         (data.reasons || []).map((reasonText: string) => ({
-          sentiment: reasonText.includes("Positive")
-            ? "Positive"
-            : reasonText.includes("Negative")
-            ? "Negative"
-            : "Neutral",
+          sentiment: sentimentOf(reasonText),
           reason: reasonText,
         }))
       );

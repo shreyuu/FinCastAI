@@ -14,18 +14,20 @@ if (missing.length > 0) {
   );
 }
 
-const connection = mysql.createConnection({
+// A pool rather than a single connection: a lone connection that MySQL closes
+// (wait_timeout, a restart, a network blip) never comes back, and every later
+// query fails until the process restarts. The pool drops a broken connection
+// and opens a new one on the next query. Connections open lazily, so a
+// database that is down shows up as an error on that query.
+const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: Number(process.env.DB_PORT) || 3306,
+  // Format any object placeholder value as a string rather than as SQL
+  // `key` = value pairs (defence in depth for the checks in server.ts).
+  stringifyObjects: true,
 });
 
-// Without this, a connection failure surfaces as an unhandled AggregateError
-// and takes the whole process down with no usable message.
-connection.on("error", (err) => {
-  console.error("Database connection error:", err.code, err.message);
-});
-
-export default connection;
+export default pool;

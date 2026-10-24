@@ -8,7 +8,7 @@ response models, and a single batched market-data call per request.
 import pandas as pd
 import pytest
 
-from market_fixtures import FakeYFinance, multi_ohlcv, ohlcv
+from market_fixtures import FakeYFinance, multi_ohlcv, ohlcv, single_ticker_download
 
 
 # ---------------------------------------------------------------- /health
@@ -151,7 +151,9 @@ def test_stock_prices_returns_502_when_the_upstream_fails(client, main, monkeypa
     r = client.get("/stock-prices")
 
     assert r.status_code == 502
-    assert "yfinance is down" in r.json()["detail"]
+    # SEC-10: the client gets a fixed message; the exception stays in the log.
+    assert "yfinance is down" not in r.json()["detail"]
+    assert r.json()["detail"].startswith("Failed to fetch stock prices")
 
 
 # ------------------------------------------------------- /news-impact/{c}
@@ -250,7 +252,9 @@ def test_news_impact_returns_502_when_the_news_api_fails(client, main, monkeypat
     r = client.get("/news-impact/Reliance")
 
     assert r.status_code == 502
-    assert "news api down" in r.json()["detail"]
+    # SEC-10: the client gets a fixed message; the exception stays in the log.
+    assert "news api down" not in r.json()["detail"]
+    assert r.json()["detail"].startswith("Failed to analyze news impact")
 
 
 # ------------------------------------------------------------- /Indicotor
@@ -440,6 +444,47 @@ def test_predict_fetches_the_ticker_exactly_once(client, main, monkeypatch):
     assert fake.ticker_calls == [], "no second round trip for the current price"
 
 
+def test_predict_handles_yfinance_multiindex_columns(client, main, monkeypatch):
+    """BUG-08: yfinance >= 0.2.51 returns ('Close', 'TCS.NS') columns for one ticker.
+
+    The feature code indexed flat names, so every live forecast raised KeyError
+    and came back as a 502.
+    """
+    frame = single_ticker_download(ohlcv(days=90), "TCS.NS")
+    monkeypatch.setattr(main, "yf", FakeYFinance(download_frame=frame))
+    monkeypatch.setattr(main, "fetch_news", lambda c: [])
+
+    r = client.get("/predict_stock?ticker=TCS.NS")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["Hdata"]) == 90
+    assert body["curprice"] == pytest.approx(189.0)  # last close of ohlcv(90)
+    assert sum(p["type"] == "prediction" for p in body["data"]) == 7
+
+
+def test_predict_skips_a_session_with_no_close_yet(client, main, monkeypatch):
+    """BUG-09: Yahoo can return the current, unfinished session with a NaN Close.
+
+    The NaN reached the response, JSON encoding failed and the client got a 500.
+    """
+    import math
+
+    raw = ohlcv(days=90)
+    raw.iloc[-1] = float("nan")  # today's row: no prices yet
+    frame = single_ticker_download(raw, "TCS.NS")
+    monkeypatch.setattr(main, "yf", FakeYFinance(download_frame=frame))
+    monkeypatch.setattr(main, "fetch_news", lambda c: [])
+
+    r = client.get("/predict_stock?ticker=TCS.NS")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["Hdata"]) == 89
+    assert all(math.isfinite(p["price"]) for p in body["data"])
+    assert body["curprice"] == pytest.approx(188.0)  # last complete session
+
+
 def test_predict_post_and_get_agree(client, main, monkeypatch):
     """The GET wrapper must delegate to the POST handler, not diverge from it."""
     monkeypatch.setattr(main, "yf", _fake_yf())
@@ -477,7 +522,9 @@ def test_predict_returns_502_when_the_upstream_fails(client, main, monkeypatch):
     r = client.get("/predict_stock?ticker=RELIANCE.NS")
 
     assert r.status_code == 502
-    assert "network unreachable" in r.json()["detail"]
+    # SEC-10: the client gets a fixed message; the exception stays in the log.
+    assert "network unreachable" not in r.json()["detail"]
+    assert r.json()["detail"].startswith("Prediction failed")
 
 
 def test_predict_does_not_mask_a_404_as_a_502(client, main, monkeypatch):

@@ -1,10 +1,8 @@
 """Synthetic yfinance-shaped data.
 
-Column layout matches what `main.py` expects: flat OHLCV columns on a
-DatetimeIndex. Note that recent yfinance versions return a *MultiIndex* for
-single-ticker downloads; `main.py` does not handle that, so these fixtures
-deliberately model the shape the code assumes rather than the one the library
-may actually return.
+`ohlcv` builds flat OHLCV columns on a DatetimeIndex. Recent yfinance
+versions (>= 0.2.51) return a *MultiIndex* even for a single-ticker download;
+`single_ticker_download` models that shape (BUG-08).
 """
 
 import numpy as np
@@ -25,6 +23,15 @@ def ohlcv(days=90, start="2025-01-01", base=100.0, step=1.0, volume=1_000_000):
         },
         index=idx,
     )
+
+
+def single_ticker_download(frame, ticker):
+    """`frame` in the shape yf.download(ticker) returns today: ('Close', 'TCS.NS') columns."""
+    out = frame.copy()
+    out.columns = pd.MultiIndex.from_tuples(
+        [(field, ticker) for field in frame.columns], names=["Price", "Ticker"]
+    )
+    return out
 
 
 def history_2d(prev_close=100.0, last_close=110.0):
