@@ -91,7 +91,7 @@ Login returns `{ id, name, email }`, which the browser keeps in `localStorage` t
 
 ### How a forecast is made
 
-`GET /predict_stock?ticker=TCS.NS`, which is what the dashboard calls, runs these steps in `predict_stock` ([main.py](backend/app/main.py)):
+`GET /predict_stock?ticker=TCS.NS`, which is what the dashboard calls, runs these steps in `_predict` ([main.py](backend/app/main.py)):
 
 1. Download daily OHLCV for the ticker from Yahoo Finance, from 2020-01-01 to today by default.
 2. Fetch Indian news for the company (the ticker without its suffix, e.g. `TCS`) from NewsData.io and score it with FinBERT, giving a sentiment `s` between −1 and 1.
